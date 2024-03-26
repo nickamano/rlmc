@@ -5,8 +5,8 @@ import numpy.typing as npt
 class rlmc_env:
     """
     molecular dynamics environment for rienforcement learning
+    "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
-
     def __init__(self, name: str) -> None:
         self.seed = np.random.randint(0, 1000)
         self.simulation = name
@@ -50,8 +50,12 @@ class rlmc_env:
     def step(self, forces: npt.ArrayLike ) -> tuple[npt.ArrayLike, npt.ArrayLike, bool]:
         """
         Take a step in the Molecular dynamics simulation 
-        take in the forces and 
-        return the next state and if the simulation is finished
+        Input:
+            forces -- the forces acting on the atoms in the system 
+        output:
+         sim_v, sim_r -- The next state according to the molecular simulation
+         v, r -- the next state according to the forces given 
+         done -- whether the simulation is finished
         """
         self.ts += 1
         done = False
@@ -61,9 +65,9 @@ class rlmc_env:
 
         f = self.compute_forces()
         sim_v, sim_r = self.euler_int(f)
-        input_v, input_r = self.euler_int(forces)
+        self.v, self.r = self.euler_int(forces)
 
-        return (np.concatenate(sim_v, sim_r), np.concatenate(input_v, input_r), done)
+        return (np.concatenate(sim_v, sim_r), np.concatenate(self.v, self.r), done)
         
     
     def seed(self, seed: int) -> None:
@@ -94,6 +98,9 @@ class rlmc_env:
         return f
 
     def euler_int(self, force: list[float]) -> tuple[npt.ArrayLike, npt.ArrayLike]:
+        """
+        Utilizes the euler method to itegrate the velocity and position with the given forces
+        """
         v = self.v + force/self.m * self.dt
         r = self.r + self.v * self.dt
         return (v, r)
