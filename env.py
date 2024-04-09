@@ -13,6 +13,7 @@ class rlmc_env:
         match self.simulation:
             case "5N-spring2D":
                 self.N = 5
+                self.D = 2
                 self.m = 1
 
                 self.t = 10
@@ -24,8 +25,8 @@ class rlmc_env:
                 self.SoB = 5 # size of box
                 self.r0 = 1
 
-                self.v = np.zeros(self.N, 2)
-                self.r = np.random.rand(self.N, 2) * self.SoB
+                self.v = np.zeros((self.N, self.D))
+                self.r = np.random.random((self.N, self.D)) * self.SoB
 
             case "5N-lj2D":
                 raise NotImplementedError("next implementation")
@@ -42,12 +43,12 @@ class rlmc_env:
             case "5N-spring2D":
                 np.random.seed(self.seed)
 
-                v = np.zeros(self.N, 2)
-                r = np.random.rand(self.N, 2) * self.SoB
+                v = np.zeros((self.N, self.D))
+                r = np.random.random((self.N, self.D)) * self.SoB
 
         return np.concatenate(v,r)
 
-    def step(self, forces: npt.ArrayLike ) -> tuple[npt.ArrayLike, npt.ArrayLike, bool]:
+    def step(self, forces: npt.ArrayLike ) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, bool]:
         """
         Take a step in the Molecular dynamics simulation 
         Input:
@@ -57,17 +58,23 @@ class rlmc_env:
          v, r -- the next state according to the forces given 
          done -- whether the simulation is finished
         """
-        self.ts += 1
-        done = False
+        if forces.shape != (self.N, self.D):
+            raise ValueError(f"forces must be in shape ({self.N}, {self.D})")
 
-        if int(self.t / self.dt) >= self.ts:
-            done = True
+        match self.simulation:
+            case "5N-spring2D":
+                
+                self.ts += 1
+                done = False
 
-        f = self.compute_forces()
-        sim_v, sim_r = self.euler_int(f)
-        self.v, self.r = self.euler_int(forces)
+                if int(self.t / self.dt) >= self.ts:
+                    done = True
 
-        return (np.concatenate(sim_v, sim_r), np.concatenate(self.v, self.r), done)
+                f = self.compute_forces()
+                sim_v, sim_r = self.euler_int(f)
+                self.v, self.r = self.euler_int(forces)
+
+                return (sim_v, sim_r, self.v, self.r, done)
         
     
     def seed(self, seed: int) -> None:
@@ -87,7 +94,7 @@ class rlmc_env:
         """
         The function computes forces on each pearticle at time step n
         """
-        f = np.zeros(self.N, 2)
+        f = np.zeros((self.N, 2))
 
         for i in range(self.N):
             for j in range(self.N):
