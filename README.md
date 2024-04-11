@@ -8,7 +8,7 @@
 env = rlmc_env("5N-spring2D")
 env.seed(0)
 state = env.reset()
-simulation_state, input_state = env.step()
+simulation_velocity, simulation_positions, reward, done = env.step()
 ```
 
 ## Currently Implemented

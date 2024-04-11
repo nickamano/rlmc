@@ -9,6 +9,7 @@ class rlmc_env:
     """
     def __init__(self, name: str) -> None:
         self.seed = np.random.randint(0, 1000)
+        np.random.seed(self.seed)
         self.simulation = name
         match self.simulation:
             case "5N-spring2D":
@@ -16,17 +17,18 @@ class rlmc_env:
                 self.D = 2
                 self.m = 1
 
-                self.t = 10
-                self.dt = 0.05
+                self.t = 10 # total time
+                self.dt = 0.05 # change in time
                 
                 self.T = 300
                 self.ks = 5 
-                self.ts = 0
+                self.ts = 0 # current time step
                 self.SoB = 5 # size of box
                 self.r0 = 1
 
                 self.v = np.zeros((self.N, self.D))
                 self.r = np.random.random((self.N, self.D)) * self.SoB
+                self.terminate = False
 
             case "5N-lj2D":
                 raise NotImplementedError("next implementation")
@@ -43,23 +45,27 @@ class rlmc_env:
             case "5N-spring2D":
                 np.random.seed(self.seed)
 
-                v = np.zeros((self.N, self.D))
-                r = np.random.random((self.N, self.D)) * self.SoB
+                self.v = np.zeros((self.N, self.D))
+                self.r = np.random.random((self.N, self.D)) * self.SoB
+                self.ts = 0
+                self.terminate = False
 
-        return np.concatenate(v,r)
+        return self.v, self.r
 
-    def step(self, forces: npt.ArrayLike ) -> tuple[npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, npt.ArrayLike, bool]:
+    def step(self, forces: npt.ArrayLike ) -> tuple[ npt.ArrayLike, npt.ArrayLike, bool]:
         """
         Take a step in the Molecular dynamics simulation 
         Input:
             forces -- the forces acting on the atoms in the system 
         output:
-         sim_v, sim_r -- The next state according to the molecular simulation
-         v, r -- the next state according to the forces given 
-         done -- whether the simulation is finished
+         v, r -- (np.array) The next state according to the forces given 
+         reward -- (float) Reward given to the actor
+         done -- (bool) whether the simulation is finished
         """
         if forces.shape != (self.N, self.D):
             raise ValueError(f"forces must be in shape ({self.N}, {self.D})")
+        if self.terminate:
+            raise ValueError("simulation is terminated")
 
         match self.simulation:
             case "5N-spring2D":
@@ -67,17 +73,25 @@ class rlmc_env:
                 self.ts += 1
                 done = False
 
-                if int(self.t / self.dt) >= self.ts:
+                if self.ts >= int(self.t / self.dt):
                     done = True
+                    self.terminated = True
+                    reward = 100
+                    return (self.v, self.r, reward, done)
 
                 f = self.compute_forces()
                 sim_v, sim_r = self.euler_int(f)
                 self.v, self.r = self.euler_int(forces)
 
-                return (sim_v, sim_r, self.v, self.r, done)
+                reward = self.reward(sim_v, sim_r)
+                if reward == -100:
+                    done = True
+                    self.terminated = True
+
+                return (self.v, self.r, reward, done)
         
     
-    def seed(self, seed: int) -> None:
+    def set_seed(self, seed: int) -> None:
         """
         Sets the random seed of the enviroment
         """
@@ -111,3 +125,43 @@ class rlmc_env:
         v = self.v + force/self.m * self.dt
         r = self.r + self.v * self.dt
         return (v, r)
+
+    def reward(self, sim_v, sim_r):
+        """
+        Calculates the reward for given v and r, should be calculated after updating self.v and self.r
+        If the absolute difference in simulation and predicted velocities is at least 100 different from the, kill the run
+        and give -100 reward
+        """
+        sim_energy = (self.compute_total_K(sim_v) - self.compute_total_U(sim_r))
+        real_energy = (self.compute_total_K(self.v) - self.compute_total_U(self.r))
+        reward = 2 - np.abs(np.subtract(self.r, sim_r)).mean() - np.abs(sim_energy - real_energy)
+
+        if (np.mean(np.abs(self.v - sim_v)) > 100) or reward < -100:
+            return -100
+        return reward
+
+    def compute_total_U(self, r):
+        """
+        Compute the total potential energy of a system with atoms at r locations
+        """
+        match self.simulation:
+            case "5N-spring2D":
+                U = 0
+                for i in range(self.N):
+                    for j in range(i, self.N):
+                        if i != j:
+                            rij = r[i] - r[j]
+                            rij_abs = np.linalg.norm(rij)
+                            U += self.ks/2 * rij_abs
+                return U
+
+    def compute_total_K(self, v):
+        """
+        Compute the total kinetic energy of the system with atoms with velocity v
+        """
+        match self.simulation:
+            case "5N-spring2D":
+                K = 0
+                for i in range(self.N):
+                    K +=(self.m/2) * (v[i] * v[i]).sum()
+                return K
