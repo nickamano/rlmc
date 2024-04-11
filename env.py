@@ -50,9 +50,9 @@ class rlmc_env:
                 self.ts = 0
                 self.terminate = False
 
-        return self.v, self.r
+        return np.concatenate((self.v, self.r)).flatten()
 
-    def step(self, forces: npt.ArrayLike ) -> tuple[ npt.ArrayLike, npt.ArrayLike, bool]:
+    def step(self, forces: npt.ArrayLike ) -> tuple[ npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation 
         Input:
@@ -62,7 +62,9 @@ class rlmc_env:
          reward -- (float) Reward given to the actor
          done -- (bool) whether the simulation is finished
         """
-        if forces.shape != (self.N, self.D):
+        try: 
+            forces = forces.reshape((self.N, self.D))
+        except:
             raise ValueError(f"forces must be in shape ({self.N}, {self.D})")
         if self.terminate:
             raise ValueError("simulation is terminated")
@@ -87,7 +89,7 @@ class rlmc_env:
                     done = True
                     self.terminated = True
 
-                return (self.v, self.r, reward, done)
+                return (np.concatenate((self.v, self.r)).flatten(), reward, done)
         
     
     def set_seed(self, seed: int) -> None:
@@ -117,7 +119,7 @@ class rlmc_env:
                     f[i] -= self.ks * (rij_abs - self.r0) * rij / rij_abs
         return f
 
-    def euler_int(self, force: list[float]) -> tuple[npt.ArrayLike, npt.ArrayLike]:
+    def euler_int(self, force: npt.ArrayLike) -> tuple[npt.ArrayLike, npt.ArrayLike]:
         """
         Utilizes the euler method to itegrate the velocity and position with the given forces
         """
@@ -133,9 +135,9 @@ class rlmc_env:
         """
         sim_energy = (self.compute_total_K(sim_v) - self.compute_total_U(sim_r))
         real_energy = (self.compute_total_K(self.v) - self.compute_total_U(self.r))
-        reward = 2 - np.abs(np.subtract(self.r, sim_r)).mean() - np.abs(sim_energy - real_energy)
+        reward = 5 - np.abs(np.subtract(self.r, sim_r)).mean() - np.abs(sim_energy - real_energy)
 
-        if (np.mean(np.abs(self.v - sim_v)) > 100) or reward < -20:
+        if (np.mean(np.abs(self.v - sim_v)) > 100) or reward < 0:
             return -100
         return reward
 
