@@ -17,7 +17,7 @@ class rlmc_env:
                 self.D = 2
                 self.m = 1
 
-                self.t = 10 # total time
+                self.t = 15 # total time
                 self.dt = 0.05 # change in time
                 
                 self.T = 300
@@ -76,8 +76,7 @@ class rlmc_env:
                 if self.ts >= int(self.t / self.dt):
                     done = True
                     self.terminated = True
-                    reward = 100
-                    return (self.v, self.r, reward, done)
+                    return (self.v, self.r, 1, done)
 
                 f = self.compute_forces()
                 sim_v, sim_r = self.euler_int(f)
@@ -136,7 +135,7 @@ class rlmc_env:
         real_energy = (self.compute_total_K(self.v) - self.compute_total_U(self.r))
         reward = 2 - np.abs(np.subtract(self.r, sim_r)).mean() - np.abs(sim_energy - real_energy)
 
-        if (np.mean(np.abs(self.v - sim_v)) > 100) or reward < -100:
+        if (np.mean(np.abs(self.v - sim_v)) > 100) or reward < -20:
             return -100
         return reward
 
