@@ -19,10 +19,11 @@ if __name__ == "__main__":
                   batch_size=64, tau=0.001, device=device)
     print("Simulation Start")
     episodes = 100
+    steps = 1000
     for episode in range(episodes):
         score = 0
         done = False
-        while not done:
+        for step in range(1000):
             turn_off_noise = False if 0 <= episode < 75 else True
             state = np.concatenate((env.v, env.r)).flatten()
             action = agent.choose_action(state, episode, turn_off_noise)
@@ -30,7 +31,7 @@ if __name__ == "__main__":
             agent.remember(state, action, reward, next_state, int(done))
             state = next_state
             score += reward
-        print("Step {} reward: {}".format(episode, score))
+        print("Episode {} score: {}".format(episode, score))
     env.reset()
 
     # for i in range(1000):
