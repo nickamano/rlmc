@@ -35,22 +35,18 @@ class CriticNetwork(nn.Module):
         self.n_actions = n_actions
 
         self.fc1 = nn.Linear(self.input_dims, self.fc_dims[0])
-        self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
-        self.action_value = nn.Linear(self.n_actions, self.fc_dims[1])
-        self.q = nn.Linear(self.fc_dims[1], 1)
+        self.fc2 = nn.Linear(self.fc_dims[0] + self.n_actions, self.fc_dims[1])
+        self.fc3 = nn.Linear(self.fc_dims[1], 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
 
     def forward(self, state, action):
-        state_value = self.fc1(state)
-        state_value = F.relu(state_value)
-        state_value = self.fc2(state_value)
-
-        action_value = F.relu(self.action_value(action))
-        state_action_value = F.relu(T.add(state_value, action_value))
-        state_action_value = self.q(state_action_value)
-
-        return state_action_value
+        x = self.fc1(state)
+        x = F.relu(x)
+        x = self.fc2(T.cat([x, action], 1))
+        x = F.relu(x)
+        x = self.fc3(x)
+        return x
 
 
 class ExplorationNoise(object):
@@ -61,14 +57,6 @@ class ExplorationNoise(object):
         self.dt = dt
         self.sigma_decay_parameter = 1 - self.dt
         self.x_prev = 0.0
-
-    def ou_noise(self, sigma_decay=False):
-        if sigma_decay:
-            self.sigma = self.sigma_decay_parameter * self.sigma
-        dW = np.sqrt(self.dt) * np.random.normal(size=self.mu.shape)
-        x = self.x_prev + (self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * dW)
-        self.x_prev = x
-        return x
 
     def gaussian_noise(self, episode, sigma_decay=False):
         if sigma_decay:

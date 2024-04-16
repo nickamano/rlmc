@@ -2,9 +2,10 @@ from scipy.stats import maxwell
 import numpy as np
 import numpy.typing as npt
 
+
 class rlmc_env:
     """
-    molecular dynamics environment for rienforcement learning
+    molecular dynamics environment for reinforcement learning
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
     def __init__(self, name: str, n: int) -> None:
@@ -17,21 +18,20 @@ class rlmc_env:
                 self.D = 2
                 self.m = 1
 
-                self.dt = 0.005 # change in time
+                self.dt = 0.005  # change in time
                 
                 # Simulation Constants
                 self.ks = 1         # Spring Constant
                 self.radius = 0.1   # Molecule Radius
 
-
-                self.ts = 0 # current time step
-                self.SoB = 5 # size of box
+                self.ts = 0  # current time step
+                self.SoB = 5  # size of box
                 self.r0 = 1
 
                 self.r_init = np.zeros((self.N, self.D))
                 self.v_init = np.zeros((self.N, self.D))
-                self.v = self.r_init
-                self.r = self.v_init
+                self.v = self.v_init  # state's velocities
+                self.r = self.r_init  # state's locations
                 self.terminate = False
 
                 self.U_init = 0
@@ -53,7 +53,7 @@ class rlmc_env:
     
     def reset(self) -> None:
         """
-        Reset the molecular dyanmics simulation to initial states
+        Reset the molecular dynamics simulation to initial states
         """
         match self.simulation:
             case "N-spring2D":
@@ -69,7 +69,7 @@ class rlmc_env:
     
     def set_seed(self, seed: int) -> None:
         """
-        Sets the random seed of the enviroment
+        Sets the random seed of the environment
         """
         self.seed = seed
 
@@ -192,23 +192,3 @@ class rlmc_env:
                 for i in range(self.N):
                     K +=(self.m/2) * (v[i] * v[i]).sum()
         return K
-            
-if __name__ == "__main__":
-    # Initialize Environment for 2D N-body spring simulation
-    testenv = rlmc_env("N-spring2D", 10)
-
-    # Intialize Starting Positions and Velocities
-    testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
-    testenv.set_initial_vel(np.zeros((testenv.N, testenv.D)))
-
-    # Set Initial Energy
-    testenv.set_initial_energies()
-
-    print("Simulation Start")
-    for i in range(1000):
-        action = testenv.compute_forces()  # Replace this action with the action from the actor network
-        next_state, reward, done = testenv.step(action)
-
-        print("Step{} reward: {}".format(i, reward))
-
-    testenv.reset()
