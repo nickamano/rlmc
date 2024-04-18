@@ -75,7 +75,7 @@ class rlmc_env:
         """
         match self.simulation:
             case "N-spring2D":
-                self.set_seed(np.random.randint)
+                self.set_seed(np.random.randint(0, 1000))
 
                 self.r_init = max_dist * np.random.rand(self.N, self.D)
                 self.v_init = np.zeros((self.N, self.D))
