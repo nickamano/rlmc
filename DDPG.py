@@ -23,7 +23,7 @@ class ActorNetwork(nn.Module):
         x = F.relu(x)
         x = self.fc2(x)
         x = F.relu(x)
-        x = T.tanh(self.mu(x))
+        x = 0.1 * T.tanh(self.mu(x))
         return x
 
 
