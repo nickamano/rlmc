@@ -26,7 +26,9 @@ if __name__ == "__main__":
         for step in range(1000):
             turn_off_noise = False if 0 <= episode < 75 else True
             state = np.concatenate((env.v, env.r)).flatten()
-            action = agent.choose_action(state, episode, turn_off_noise)
+            action_actor = agent.choose_action(state, episode, turn_off_noise)
+            action_simu = env.compute_forces()
+            action = action_simu + action_actor
             next_state, reward, done = env.step(action)
             agent.remember(state, action, reward, next_state, int(done))
             state = next_state
