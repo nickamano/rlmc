@@ -8,7 +8,8 @@ class rlmc_env:
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
     def __init__(self, name: str, n: int, dt: float) -> None:
-        self.seed = np.random.randint(0, 1000)
+        self.max_int = 65535
+        self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
         self.simulation = name
 
@@ -63,8 +64,7 @@ class rlmc_env:
                 self.ts = 0
                 self.terminate = False
 
-                self.U_init = 0
-                self.K_init = 0
+                self.set_initial_energies()
 
     def reset_random(self, max_dist: float) -> None:
         """
@@ -73,7 +73,7 @@ class rlmc_env:
         """
         match self.simulation:
             case "N-spring2d":
-                self.set_seed(np.random.randint)
+                self.set_seed(np.random.randint(self.max_int))
 
                 self.r_init = max_dist * np.random.rand(testenv.N, testenv.D)
                 self.v_init = np.zeros((testenv.N, testenv.D))
@@ -117,7 +117,7 @@ class rlmc_env:
         """
         Return current state as an flattened array
         """
-        return np.append(np.concatenate((testenv.v, testenv.r)).flatten(), n_dt)
+        return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt)
 
     def step(self, forces: npt.ArrayLike, n_dt: int) -> tuple[npt.ArrayLike, float, bool]:
         """
@@ -154,7 +154,7 @@ class rlmc_env:
                 # Calculate Reward
                 reward = self.reward(r_target, self.v, self.r)
 
-                return np.concatenate((self.v, self.r)).flatten(), reward, done
+                return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
         
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -190,7 +190,7 @@ class rlmc_env:
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_predict + U_predict
 
-        reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+        reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) # Add short term energy reward
         return reward
 
     def compute_total_U(self, r):
@@ -206,7 +206,7 @@ class rlmc_env:
                             rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             U += 1/2 * self.ks * rij_abs**2
-                
+        
         return U
 
     def compute_total_K(self, v):
@@ -228,7 +228,7 @@ if __name__ == "__main__":
     match runtype:
         case "demo":
             # Initialize Environment for 2D N-body spring simulation
-            testenv = rlmc_env("N-spring2D", 2, 0.005)
+            testenv = rlmc_env("N-spring2D", 5, 0.00005)
 
             # Intialize Starting Positions and Velocities
             testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
@@ -238,14 +238,14 @@ if __name__ == "__main__":
             testenv.set_initial_energies()
 
             # Section 1: Run simulation for n_steps
-            n_steps = 5
+            n_steps = 1000
             print("Simulation Start")
             tot_reward = 0
             sum_action = np.zeros((testenv.N, testenv.D))
             print("initial pos: {}".format(testenv.r.flatten()))
             print("initial vel: {}".format(testenv.v.flatten()))
             for i in range(n_steps):
-                print("Step {}".format(i))
+                # print("Step {}".format(i))
                 n_dt = 1
                 state = testenv.get_current_state(n_dt)
                 #action = actornetwork(state)
@@ -256,8 +256,8 @@ if __name__ == "__main__":
                 tot_reward += reward
                 sum_action += action
 
-                # if i%100 == 0:
-                #     print("Step{} reward: {}".format(i, reward))
+                if i%100 == 0:
+                    print("Step{} reward: {}".format(i, reward))
             print("final pos: {}".format(testenv.r.flatten()))
             print("final vel: {}".format(testenv.v.flatten()))
             print("Reward: {}".format(tot_reward))
