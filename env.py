@@ -7,8 +7,9 @@ class rlmc_env:
     molecular dynamics environment for rienforcement learning
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
-    def __init__(self, name: str, n: int) -> None:
-        self.seed = np.random.randint(0, 1000)
+    def __init__(self, name: str, n: int, dt: float) -> None:
+        self.max_int = 65535
+        self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
         self.simulation = name
         match self.simulation:
@@ -72,7 +73,7 @@ class rlmc_env:
         Use when agent reaches acceptable average reward to change initial conditions
         """
         match self.simulation:
-            case "N-spring2D":
+            case "N-spring2d":
                 self.set_seed(np.random.randint(self.max_int))
 
                 self.r_init = max_dist * np.random.rand(self.N, self.D)
@@ -112,7 +113,13 @@ class rlmc_env:
         self.K_init = self.compute_total_K(self.v)
         self.U_init = self.compute_total_U(self.r)
 
-    def step(self, forces: npt.ArrayLike):# -> tuple[ npt.ArrayLike, float, bool]:
+    def get_current_state(self, n_dt:int) -> npt.ArrayLike:
+        """
+        Return current state as an flattened array
+        """
+        return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt)
+
+    def step(self, forces: npt.ArrayLike, n_dt: int) -> tuple[npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation 
         Input:
@@ -140,7 +147,7 @@ class rlmc_env:
 
                 reward = self.reward(v_target, r_target)
 
-                return np.concatenate((self.v, self.r)).flatten(), reward, done
+                return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
         
     def compute_forces(self) -> npt.ArrayLike:
         """
@@ -176,7 +183,7 @@ class rlmc_env:
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_pred + U_pred
 
-        reward = -np.abs(np.subtract(self.r, r_pred)).mean() - np.abs(total_energy_init - total_energy_pred)
+        reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) # Add short term energy reward
         return reward
 
     def compute_total_U(self, r):
@@ -192,7 +199,7 @@ class rlmc_env:
                             rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             U += 1/2 * self.ks * rij_abs**2
-                
+        
         return U
 
     def compute_total_K(self, v):
@@ -207,8 +214,13 @@ class rlmc_env:
         return K
             
 if __name__ == "__main__":
-    # Initialize Environment for 2D N-body spring simulation
-    testenv = rlmc_env("N-spring2D", 10)
+    import sys
+    runtype = sys.argv[1]
+    
+    match runtype:
+        case "demo":
+            # Initialize Environment for 2D N-body spring simulation
+            testenv = rlmc_env("N-spring2D", 5, 0.00005)
 
     # Intialize Starting Positions and Velocities
     testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
@@ -217,11 +229,53 @@ if __name__ == "__main__":
     # Set Initial Energy
     testenv.set_initial_energies()
 
-    print("Simulation Start")
-    for i in range(1000):
-        action = testenv.compute_forces()  # Replace this action with the action from the actor network
-        next_state, reward, done = testenv.step(action)
+            # Section 1: Run simulation for n_steps
+            n_steps = 1000
+            print("Simulation Start")
+            tot_reward = 0
+            sum_action = np.zeros((testenv.N, testenv.D))
+            print("initial pos: {}".format(testenv.r.flatten()))
+            print("initial vel: {}".format(testenv.v.flatten()))
+            for i in range(n_steps):
+                # print("Step {}".format(i))
+                n_dt = 1
+                state = testenv.get_current_state(n_dt)
+                #action = actornetwork(state)
 
         print("Step{} reward: {}".format(i, reward))
 
-    testenv.reset()
+                tot_reward += reward
+                sum_action += action
+
+                if i%100 == 0:
+                    print("Step{} reward: {}".format(i, reward))
+            print("final pos: {}".format(testenv.r.flatten()))
+            print("final vel: {}".format(testenv.v.flatten()))
+            print("Reward: {}".format(tot_reward))
+            print()
+
+            # Section 2: Step simulation forward by n_steps
+            testenv.reset()
+            print("initial pos: {}".format(testenv.r.flatten()))
+            print("initial vel: {}".format(testenv.v.flatten()))
+            next_state, reward, done = testenv.step(sum_action, n_steps)
+            print("final pos: {}".format(testenv.r.flatten()))
+            print("final vel: {}".format(testenv.v.flatten()))
+            print("Reward: {}".format(reward))
+
+            # Example of how to get current state
+            state = testenv.get_current_state(n_steps)
+            print("Current state: {}".format(state))
+
+        case "finddts":
+            """Acceptable dt for each N"""
+            N_list = [5, 10, 20, 50, 100]
+            dt_baselines = [0.005, 0.00005, 0.000005, 0.0000001, 0.00000005]
+            dt_dict = dict(zip(N_list, dt_baselines))
+
+            print("(N, dt):")
+            for n, dt in zip(N_list, dt_baselines):
+                print("({}, {})".format(n, dt))
+
+        case _:
+            print("Not a valid case")
