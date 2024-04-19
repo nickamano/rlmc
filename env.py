@@ -64,8 +64,21 @@ class rlmc_env:
                 self.ts = 0
                 self.terminate = False
 
-                self.U_init = 0
-                self.K_init = 0
+                self.set_initial_energies()
+
+    def reset_random(self, max_dist: float) -> None:
+        """
+        Reset simulation to randomized initial state
+        Use when agent reaches acceptable average reward to change initial conditions
+        """
+        match self.simulation:
+            case "N-spring2D":
+                self.set_seed(np.random.randint(self.max_int))
+
+                self.r_init = max_dist * np.random.rand(self.N, self.D)
+                self.v_init = np.zeros((self.N, self.D))
+
+                self.reset()
     
     def set_seed(self, seed: int) -> None:
         """
