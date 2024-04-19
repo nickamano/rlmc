@@ -5,18 +5,19 @@ import torch as T
 import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
-    env = rlmc_env("N-spring2D", 5, 0.005)  # Creat env
+    env = rlmc_env("N-spring2D", 2, 0.01)  # Creat env
     input_dims, n_actions = env.NNdims()
     max_abs_action = 0.75
     # Create DDPG Agent
     agent = Agent(alpha=3e-4, beta=3e-4, gamma=0.99, input_dims=input_dims, fc_dims=[256, 128], n_actions=n_actions,
-                  batch_size=128, tau=0.005, clip_action=max_abs_action, max_size=10000,
+                  batch_size=64, tau=0.005, clip_action=max_abs_action, max_size=10000,
                   device=T.device('cuda:0' if T.cuda.is_available() else 'cpu'))
     print("Simulation Start")
-    episodes = 200
+    episodes = 500
+    pretrain_episodes = int(episodes / 10)
     steps = 200
     scores = []
-    for episode in range(episodes):
+    for episode in range(episodes + pretrain_episodes):  # pretrain 20 episodes
         env.reset_random(1.0)
         state = env.get_current_state(n_dt=1)
         score = 0
@@ -28,8 +29,9 @@ if __name__ == "__main__":
             next_state, reward, _ = env.step(action, n_dt=1)
             score += reward
             if score > -50 and step == steps - 1:
-                reward = 100
                 done = True
+                score -= reward
+                reward = 0
             agent.remember(state, action, reward, next_state, int(done))
             agent.learn()
             state = next_state
@@ -39,18 +41,18 @@ if __name__ == "__main__":
         else:
             print("Episode {} average score: {}".format(episode, sum(scores[-10:]) / 10))
 
-    x = list(range(len(scores)))
-
+    x = list(range(len(scores) - pretrain_episodes))
     average_scores = []
     ten = []
-    for i in range(len(scores)):
-        if i < 10:
+    for i in range(pretrain_episodes, len(scores)):
+        idx = i - pretrain_episodes
+        if idx < 10:
             ten.append(scores[i])
         else:
-            ten[i % 10] = scores[i]
+            ten[idx % 10] = scores[i]
         average_scores.append(np.mean(ten))
 
-    plt.plot(scores, label='score')
+    plt.plot(scores[pretrain_episodes:], label='score')
     plt.plot(average_scores, label='average score')
     plt.title('plot')
     plt.xlabel('episodes')
