@@ -72,11 +72,11 @@ class rlmc_env:
         Use when agent reaches acceptable average reward to change initial conditions
         """
         match self.simulation:
-            case "N-spring2d":
+            case "N-spring2D":
                 self.set_seed(np.random.randint(self.max_int))
 
-                self.r_init = max_dist * np.random.rand(testenv.N, testenv.D)
-                self.v_init = np.zeros((testenv.N, testenv.D))
+                self.r_init = max_dist * np.random.rand(self.N, self.D)
+                self.v_init = np.zeros((self.N, self.D))
 
                 self.reset()
     
