@@ -6,11 +6,12 @@ import numpy as np
 
 
 class ActorNetwork(nn.Module):
-    def __init__(self, alpha, input_dims, fc_dims, n_actions):
+    def __init__(self, alpha, input_dims, fc_dims, n_actions, clip_action):
         super(ActorNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc_dims = fc_dims
         self.n_actions = n_actions
+        self.clip_action = clip_action
 
         self.fc1 = nn.Linear(self.input_dims, self.fc_dims[0])
         self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
@@ -23,7 +24,7 @@ class ActorNetwork(nn.Module):
         x = F.relu(x)
         x = self.fc2(x)
         x = F.relu(x)
-        x = 0.5 * T.tanh(self.mu(x))
+        x = self.clip_action * T.tanh(self.mu(x))
         return x
 
 
@@ -34,16 +35,16 @@ class CriticNetwork(nn.Module):
         self.fc_dims = fc_dims
         self.n_actions = n_actions
 
-        self.fc1 = nn.Linear(self.input_dims, self.fc_dims[0])
-        self.fc2 = nn.Linear(self.fc_dims[0] + self.n_actions, self.fc_dims[1])
+        self.fc1 = nn.Linear(self.input_dims + n_actions, self.fc_dims[0])
+        self.fc2 = nn.Linear(self.fc_dims[0], self.fc_dims[1])
         self.fc3 = nn.Linear(self.fc_dims[1], 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
 
     def forward(self, state, action):
-        x = self.fc1(state)
+        x = self.fc1(T.cat([state, action], 1))
         x = F.relu(x)
-        x = self.fc2(T.cat([x, action], 1))
+        x = self.fc2(x)
         x = F.relu(x)
         x = self.fc3(x)
         return x
@@ -99,16 +100,17 @@ class ReplayBuffer(object):
 
 class Agent(object):
     def __init__(self, alpha, beta, gamma, input_dims, fc_dims, n_actions, batch_size,
-                 tau, device, max_size=50000):
+                 tau, clip_action, max_size, device):
+        self.clip_action = clip_action
         self.gamma = gamma
         self.tau = tau
         self.memory = ReplayBuffer(max_size, input_dims, n_actions)
         self.batch_size = batch_size
 
-        self.actor = ActorNetwork(alpha, input_dims, fc_dims, n_actions=n_actions)
+        self.actor = ActorNetwork(alpha, input_dims, fc_dims, n_actions=n_actions, clip_action=clip_action)
         self.critic = CriticNetwork(beta, input_dims, fc_dims, n_actions=n_actions)
 
-        self.target_actor = ActorNetwork(alpha, input_dims, fc_dims, n_actions=n_actions)
+        self.target_actor = ActorNetwork(alpha, input_dims, fc_dims, n_actions=n_actions, clip_action=clip_action)
         self.target_critic = CriticNetwork(beta, input_dims, fc_dims, n_actions=n_actions)
 
         self.device = device
@@ -125,29 +127,16 @@ class Agent(object):
             # mu_prime = mu + T.tensor(self.noise.ou_noise(sigma_decay=True), dtype=T.float).to(self.device)
             mu_prime = mu + T.tensor(self.noise.gaussian_noise(episode, sigma_decay=True), dtype=T.float).to(self.device)
         self.actor.train()
-        return mu_prime.cpu().detach().numpy()
+        action = mu_prime.cpu().detach().numpy()
+        action = np.clip(action, -self.clip_action, self.clip_action)
+        return action
 
     def remember(self, state, action, reward, new_state, done):
         self.memory.store_transition(state, action, reward, new_state, done)
 
-    def soft_update(self, tau):
-        actor_params = self.actor.named_parameters()
-        critic_params = self.critic.named_parameters()
-        target_actor_params = self.target_actor.named_parameters()
-        target_critic_params = self.target_critic.named_parameters()
-
-        actor_state_dict = dict(actor_params)
-        critic_state_dict = dict(critic_params)
-        target_actor_dict = dict(target_actor_params)
-        target_critic_dict = dict(target_critic_params)
-
-        for name in actor_state_dict:
-            actor_state_dict[name] = tau * actor_state_dict[name].clone() + (1 - tau) * target_actor_dict[name].clone()
-        self.target_actor.load_state_dict(actor_state_dict)
-
-        for name in critic_state_dict:
-            critic_state_dict[name] = tau * critic_state_dict[name].clone() + (1 - tau) * target_critic_dict[name].clone()
-        self.target_critic.load_state_dict(critic_state_dict)
+    def soft_update(self, target, source, tau):
+        for target_param, param in zip(target.parameters(), source.parameters()):
+            target_param.data.copy_(target_param.data * (1.0 - tau) + param.data * tau)
 
     def learn(self):
         if self.memory.mem_cntr < self.batch_size:
@@ -187,4 +176,5 @@ class Agent(object):
         actor_loss.backward()
         self.actor.optimizer.step()
 
-        self.soft_update(self.tau)
+        self.soft_update(self.target_actor, self.actor, self.tau)
+        self.soft_update(self.target_critic, self.critic, self.tau)
