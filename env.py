@@ -1,4 +1,3 @@
-from scipy.stats import maxwell
 import numpy as np
 import numpy.typing as npt
 
