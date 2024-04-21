@@ -31,8 +31,8 @@ class rlmc_env:
 
                 self.r_init = np.zeros((self.N, self.D))
                 self.v_init = np.zeros((self.N, self.D))
-                self.v = self.r_init
-                self.r = self.v_init
+                self.v = self.v_init
+                self.r = self.r_init
                 self.terminate = False
 
                 self.U_init = 0
@@ -222,73 +222,3 @@ class rlmc_env:
                 for i in range(self.N):
                     K += (self.m / 2) * (v[i] * v[i]).sum()
         return K
-
-
-if __name__ == "__main__":
-    import sys
-
-    runtype = sys.argv[1]
-
-    match runtype:
-        case "demo":
-            # Initialize Environment for 2D N-body spring simulation
-            testenv = rlmc_env("N-spring2D", 5, 0.00005)
-
-            # Intialize Starting Positions and Velocities
-            testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
-            testenv.set_initial_vel(np.zeros((testenv.N, testenv.D)))
-
-            # Set Initial Energy
-            testenv.set_initial_energies()
-
-            # Section 1: Run simulation for n_steps
-            n_steps = 1000
-            print("Simulation Start")
-            tot_reward = 0
-            sum_action = np.zeros((testenv.N, testenv.D))
-            print("initial pos: {}".format(testenv.r.flatten()))
-            print("initial vel: {}".format(testenv.v.flatten()))
-            for i in range(n_steps):
-                # print("Step {}".format(i))
-                n_dt = 1
-                state = testenv.get_current_state(n_dt)
-                # action = actornetwork(state)
-
-                action = testenv.compute_forces(testenv.r)  # Replace this action with the action from the actor network
-                next_state, reward, done = testenv.step(action, n_dt)
-
-                tot_reward += reward
-                sum_action += action
-
-                if i % 100 == 0:
-                    print("Step{} reward: {}".format(i, reward))
-            print("final pos: {}".format(testenv.r.flatten()))
-            print("final vel: {}".format(testenv.v.flatten()))
-            print("Reward: {}".format(tot_reward))
-            print()
-
-            # Section 2: Step simulation forward by n_steps
-            testenv.reset()
-            print("initial pos: {}".format(testenv.r.flatten()))
-            print("initial vel: {}".format(testenv.v.flatten()))
-            next_state, reward, done = testenv.step(sum_action, n_steps)
-            print("final pos: {}".format(testenv.r.flatten()))
-            print("final vel: {}".format(testenv.v.flatten()))
-            print("Reward: {}".format(reward))
-
-            # Example of how to get current state
-            state = testenv.get_current_state(n_steps)
-            print("Current state: {}".format(state))
-
-        case "finddts":
-            """Acceptable dt for each N"""
-            N_list = [5, 10, 20, 50, 100]
-            dt_baselines = [0.005, 0.00005, 0.000005, 0.0000001, 0.00000005]
-            dt_dict = dict(zip(N_list, dt_baselines))
-
-            print("(N, dt):")
-            for n, dt in zip(N_list, dt_baselines):
-                print("({}, {})".format(n, dt))
-
-        case _:
-            print("Not a valid case")
