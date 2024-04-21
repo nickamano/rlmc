@@ -12,22 +12,21 @@ class rlmc_env:
         self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
         self.simulation = name
+
         match self.simulation:
             case "N-spring2D":
                 self.N = n
                 self.D = 2
                 self.m = 1
 
-                self.dt = 0.005 # change in time
+                self.dt = dt # time step
                 
                 # Simulation Constants
                 self.ks = 1         # Spring Constant
                 self.radius = 0.1   # Molecule Radius
 
-
                 self.ts = 0 # current time step
                 self.SoB = 5 # size of box
-                self.r0 = 1
 
                 self.r_init = np.zeros((self.N, self.D))
                 self.v_init = np.zeros((self.N, self.D))
@@ -48,17 +47,17 @@ class rlmc_env:
         Return the input and output dimensions of the simulation.
         Use for defining NN input and output sizes
         """
-        in_dim = 2 * self.N * self.D
+        in_dim = 2 * self.N * self.D + 1
         out_dim = self.N * self.D
         return in_dim, out_dim
     
     def reset(self) -> None:
         """
-        Reset the molecular dyanmics simulation to initial states
+        Reset the molecular dynamics simulation to initial states
         """
         match self.simulation:
             case "N-spring2D":
-                np.random.seed(self.seed)
+                self.set_seed(self.seed)
 
                 self.v = self.v_init
                 self.r = self.r_init
@@ -73,7 +72,7 @@ class rlmc_env:
         Use when agent reaches acceptable average reward to change initial conditions
         """
         match self.simulation:
-            case "N-spring2d":
+            case "N-spring2D":
                 self.set_seed(np.random.randint(self.max_int))
 
                 self.r_init = max_dist * np.random.rand(self.N, self.D)
@@ -86,6 +85,7 @@ class rlmc_env:
         Sets the random seed of the enviroment
         """
         self.seed = seed
+        np.random.seed(self.seed)
 
     def set_initial_pos(self, pos: npt.ArrayLike) -> None:
         """
@@ -138,18 +138,25 @@ class rlmc_env:
 
         match self.simulation:
             case "N-spring2D":  
-                self.ts += 1
+                self.ts += n_dt
                 done = False
 
-                target_action = self.compute_forces()
-                v_target, r_target = self.euler_int(target_action)
-                self.v, self.r = self.euler_int(forces)
+                # Simulation steps
+                v_target = np.copy(self.v)
+                r_target = np.copy(self.r)
+                for _  in range(n_dt):
+                    target_action = self.compute_forces(r_target)
+                    v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
+                
+                # Lazy step
+                self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
-                reward = self.reward(v_target, r_target)
+                # Calculate Reward
+                reward = self.reward(r_target, self.v, self.r)
 
                 return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
         
-    def compute_forces(self) -> npt.ArrayLike:
+    def compute_forces(self, r) -> npt.ArrayLike:
         """
         The function computes forces on each particle at time step n
         """
@@ -160,28 +167,28 @@ class rlmc_env:
                 for i in range(self.N):
                     for j in range(self.N):
                         if i != j:
-                            rij = self.r[i] - self.r[j]
+                            rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             f[i] -= self.ks * (rij_abs - 2 * self.radius) * rij / rij_abs
         return f
 
-    def euler_int(self, force: npt.ArrayLike) -> tuple[npt.ArrayLike, npt.ArrayLike]:
+    def euler_int(self, v: npt.ArrayLike, r: npt.ArrayLike, force: npt.ArrayLike, dt: float) -> tuple[npt.ArrayLike, npt.ArrayLike]:
         """
         Utilizes the euler method to itegrate the velocity and position with the given forces
         """
-        v = self.v + force/self.m * self.dt
-        r = self.r + self.v * self.dt
-        return (v, r)
+        next_v = v + force/self.m * dt
+        next_r = r + v * dt
+        return (next_v, next_r)
 
-    def reward(self, v_pred, r_pred):
+    def reward(self, r_target, v_predict, r_predict):
         """
         Calculates the reward for given v and r, should be calculated after updating self.v and self.r
         """
-        K_pred = self.compute_total_K(v_pred)
-        U_pred = self.compute_total_U(r_pred)
+        K_predict = self.compute_total_K(v_predict)
+        U_predict = self.compute_total_U(r_predict)
 
         total_energy_init = self.K_init + self.U_init
-        total_energy_pred = K_pred + U_pred
+        total_energy_pred = K_predict + U_predict
 
         reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) # Add short term energy reward
         return reward
@@ -212,7 +219,8 @@ class rlmc_env:
                 for i in range(self.N):
                     K +=(self.m/2) * (v[i] * v[i]).sum()
         return K
-            
+
+
 if __name__ == "__main__":
     import sys
     runtype = sys.argv[1]
@@ -222,12 +230,12 @@ if __name__ == "__main__":
             # Initialize Environment for 2D N-body spring simulation
             testenv = rlmc_env("N-spring2D", 5, 0.00005)
 
-    # Intialize Starting Positions and Velocities
-    testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
-    testenv.set_initial_vel(np.zeros((testenv.N, testenv.D)))
+            # Intialize Starting Positions and Velocities
+            testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
+            testenv.set_initial_vel(np.zeros((testenv.N, testenv.D)))
 
-    # Set Initial Energy
-    testenv.set_initial_energies()
+            # Set Initial Energy
+            testenv.set_initial_energies()
 
             # Section 1: Run simulation for n_steps
             n_steps = 1000
@@ -242,7 +250,8 @@ if __name__ == "__main__":
                 state = testenv.get_current_state(n_dt)
                 #action = actornetwork(state)
 
-        print("Step{} reward: {}".format(i, reward))
+                action = testenv.compute_forces(testenv.r)  # Replace this action with the action from the actor network
+                next_state, reward, done = testenv.step(action, n_dt)
 
                 tot_reward += reward
                 sum_action += action

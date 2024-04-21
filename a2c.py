@@ -85,23 +85,23 @@ for episode in range(num_episodes):
         actor_optimizer.step()
 
         state = next_state
-        if iteration_count%10 == 0:
-            print(f"iteration {iteration_count}, reward {reward}")
+        print(f"iteration {iteration_count}, reward {reward}")
 
-        if not last_reward:
-            last_reward = reward
+        # if not last_reward:
+        #     last_reward = reward
         
-        else:
-            """
-            checking stoping conditions: the difference between current reward and the last reward should be
-            very small. 
-            """
-            if abs(last_reward - reward) < 0.0001:
-                count += 1
-                if count >= 100: break
+        # else:
+        #     """
+        #     checking stoping conditions: the difference between current reward and the last reward should be
+        #     very small. 
+        #     """
+        #     if abs(last_reward - reward) < 0.0001:
+        #         count += 1
+        #         if count >= 100: break
             
-            else:
-                count = 0
+        #     else:
+        #         count = 0
+        if reward > -0.1: break
             
     
     print(f"takes {iteration_count} iterations to converge")
