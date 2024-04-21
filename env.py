@@ -9,7 +9,7 @@ class rlmc_env:
     """
 
     def __init__(self, name: str, n: int, dt: float) -> None:
-        self.max_int = 65535
+        self.max_int = 100
         self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
         self.simulation = name

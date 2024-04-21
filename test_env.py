@@ -5,7 +5,7 @@ import numpy as np
 
 
 if __name__ == "__main__":
-    env = rlmc_env("N-spring2D", 75, 0.0001)  # Creat env
+    env = rlmc_env("N-spring2D", 5, 0.005)  # Creat env
     state_dim, action_dim = env.NNdims()
     max_abs_action = 0.75
     converge_score = -100

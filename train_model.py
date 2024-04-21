@@ -8,13 +8,13 @@ if __name__ == "__main__":
     model_name = "N-spring2D_N=10_dt=0.001_new"
     state_dim, action_dim = env.NNdims()
     max_abs_action = 4
-    converge_score = -50
+    converge_score = -60
     # Create DDPG Agent
-    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=128, hidden_width1=64, batch_size=256, lr=0.001,
-                 gamma=0.99, tau=0.005)
+    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=256, hidden_width1=128, batch_size=256, lr=0.0005,
+                 gamma=0.99, tau=0.002)
     print("Simulation Start")
     episodes = 5000
-    pretrain_episodes = 50
+    pretrain_episodes = 100
     steps = 300
     scores = []
     rb = ReplayBuffer(state_dim, action_dim)
