@@ -13,7 +13,7 @@ if __name__ == "__main__":
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     print(model_name)
     state_dim, action_dim = env.NNdims()
-    max_abs_action = 4
+    max_abs_action = 10
     converge_score = -200
     # Create DDPG Agent
     agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
