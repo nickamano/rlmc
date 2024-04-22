@@ -18,3 +18,9 @@ simulation type `"5N-spring2D"`
 ## Python Version
 
 uses `python >= 3.11`
+
+## PyTorch Version
+
+For Windows `pip3 install torch torchvision torchaudio`
+
+For Mac M1  Not sure. I think there will be something wrong because of ARM framework.

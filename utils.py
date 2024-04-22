@@ -1,10 +1,8 @@
 import os
 import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
 from matplotlib import animation
 import numpy as np
 import torch
-
 
 def list2txt(mylist, name):
     folder_path = "txt"
@@ -76,7 +74,6 @@ def visualize(positions, colors, name):
     plt.close()
     # this function will create a lot of *.png files in a folder '3Body_frames'
     ani.save(name, writer='ffmpeg', fps=60)
-
 
 def save_model(actor, name):
     model = actor
