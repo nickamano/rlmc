@@ -59,30 +59,56 @@ if __name__ == "__main__":
 
     # plot2(scores, scores_env, 10, model_name)
     
-    env = rlmc_env("N-spring2D", 10, 0.001)  # Creat env
-    state_dim, action_dim = env.NNdims()
-    max_abs_action = 4
-    model_name = "N-spring2D_N=10_dt=0.001"
+    sim_type = "N-spring2D"
+    N = 3
+    dt_ = 0.005
+    reward_type = "threshold_energy"
+
+    env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+    env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+
+    state_dim, action_dim = env_actor.NNdims()
+    max_abs_action = 1000
+    model_name = "N-spring2D_N=10_dt=0.001_trials_threshold400"
     # Load torch model
     model = torch.load("pth/" + model_name + ".pth")
-    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=256, hidden_width1=128, batch_size=256, lr=0.001,
-                 gamma=0.99, tau=0.005)
+    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
+                 gamma=0.99, tau=0.002)
     agent.actor = model
+
     print("Simulation Start (from Actor)")
     episodes = 1
-    steps = 300
-    scores = []
-    positions = []
-    env.reset_random(5.0)
-    state = env.get_current_state(n_dt=1)
-    score = 0
+    steps = 2000
+
+    positions_actor = []
+    positions_target = []
+    
+    env_target.reset_random(5.0)
+    # env_actor.reset_random(5.0)
+    env_actor.r = env_target.r
+    env_actor.v = env_target.v
+
+
+    state_actor = env_actor.get_current_state(n_dt=1)
+    state_target = env_target.get_current_state(n_dt=1)
+
+    score_actor = 0
+    score_target = 0
+
     done = False
     for step in range(steps):
-        action = agent.choose_action(state)
-        # print(action)
-        next_state, reward, _ = env.step(action, n_dt=1)
-        positions.append(env.r)
-        score += reward
-        state = next_state
-    
-    visualize(np.array(positions), ['b', 'k', 'r', 'c', 'm', 'b', 'k', 'r', 'c', 'm'], "N-spring2D_N=10_dt=0001_vis.gif")
+        action_actor = agent.choose_action(state_actor)
+        action_target = env_target.compute_forces(env_target.r)
+
+        next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1)
+        next_state_target, reward_target, _ = env_target.step(action_target, n_dt=1)
+
+        if step % 20 == 0:
+            positions_actor.append(env_actor.r)
+            positions_target.append(env_target.r)
+
+        state_actor = next_state_actor
+        state_target = next_state_target
+
+    visualize(np.array(positions_actor), ['b', 'k', 'r'], "Nspring_actor.gif")
+    visualize(np.array(positions_target), ['b', 'k', 'r'], "Nspring_target.gif")

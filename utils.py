@@ -59,7 +59,7 @@ def plot2(scores, scores_env, average_n, name):
     plt.legend(loc='lower right')
     plt.show()
 
-def visualize(positions, colors, name, xlim=(-5, 5), ylim=(-5, 5)):
+def visualize(positions, colors, name, xlim=(-5,10), ylim=(-5, 10)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
