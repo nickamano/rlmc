@@ -8,7 +8,7 @@ class rlmc_env:
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
 
-    def __init__(self, name: str, n: int, dt: float) -> None:
+    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold energy") -> None:
         self.max_int = 65535
         self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
@@ -19,6 +19,7 @@ class rlmc_env:
                 self.N = n
                 self.D = 2
                 self.m = 1
+                self.reward_flag = reward_flag
 
                 self.dt = dt  # time step
 
@@ -58,7 +59,6 @@ class rlmc_env:
         """
         match self.simulation:
             case "N-spring2D":
-                self.set_seed(self.seed)
 
                 self.v = self.v_init
                 self.r = self.r_init
@@ -74,7 +74,6 @@ class rlmc_env:
         """
         match self.simulation:
             case "N-spring2D":
-                self.set_seed(np.random.randint(self.max_int))
 
                 self.r_init = max_dist * np.random.rand(self.N, self.D)
                 self.v_init = np.zeros((self.N, self.D))
@@ -192,10 +191,19 @@ class rlmc_env:
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_predict + U_predict
 
-        if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
-            reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
-        else:
-            reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+        match self.reward_flag:
+            case "intial energy":
+                reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+            case "threshold energy":
+                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+                else:
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "no energy":
+                reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "threshold moving energy":
+                # TODO
+                reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
             
         return reward
 
