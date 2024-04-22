@@ -164,9 +164,9 @@ class rlmc_env:
                     self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
                 # Calculate Reward
-                reward_val = self.reward(r_target, actor_v, actor_r)
+                reward = self.reward( r_target, actor_v, actor_r)
 
-                return np.append(self.r.flatten(), self.dt * n_dt), reward_val, done
+                return np.append(self.r.flatten(), self.dt * n_dt), reward, done
 
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -203,18 +203,28 @@ class rlmc_env:
         total_energy_pred = K_predict + U_predict
 
         match self.reward_flag:
-            case "intial energy":
+            case "intial_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
-            case "threshold energy":
+            case "threshold_energy":
                 if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
-                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
                 else:
-                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "no energy":
+                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "no_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold moving energy":
+            case "threshold_moving_energy":
                 # TODO
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "threshold_center_of_grav":
+                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .1):
+                    reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) \
+                            - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+                else:
+                    reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() \
+                    - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+            case "center_of_grav":
+                reward = - np.abs(np.subtract(r_target, r_predict)).mean() \
+                         - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
             
         return reward
 
@@ -245,37 +255,37 @@ class rlmc_env:
                     K +=(self.m/2) * (v[i] * v[i]).sum()
         return K
       
-# if __name__ == "__main__":
-#     import sys
-#     runtype = sys.argv[1]
-#     flag = sys.argv[2]
+if __name__ == "__main__":
+    import sys
+    runtype = sys.argv[1]
+    flag = sys.argv[2]
     
-#     match runtype:
-#         case "demo":
-#             # Initialize Environment for 2D N-body spring simulation
-#             testenv = rlmc_env("N-spring2D", 10, 0.005, flag)
+    match runtype:
+        case "demo":
+            # Initialize Environment for 2D N-body spring simulation
+            testenv = rlmc_env("N-spring2D", 10, 0.005, flag)
 
-#             # Intialize Starting Positions and Velocities
-#             testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
-#             testenv.set_initial_vel(np.random.normal(0,1, (testenv.N, testenv.D)))
+            # Intialize Starting Positions and Velocities
+            testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
+            testenv.set_initial_vel(np.random.normal(0,1, (testenv.N, testenv.D)))
 
 # #             # Set Initial Energy
 # #             testenv.set_initial_energies()
 
-#             # Section 1: Run simulation for n_steps
-#             n_steps = 5000
-#             print("Simulation Start")
-#             tot_reward = 0
-#             sum_action = np.zeros((testenv.N, testenv.D))
-#             print("initial pos: {}".format(testenv.r.flatten()))
-#             print("initial vel: {}".format(testenv.v.flatten()))
-#             print(f"initial velo: {testenv.v_average}")
-#             print(f"intial mean velo: {np.mean(testenv.v, axis = 0)}")
-#             for i in range(n_steps):
-#                 # print("Step {}".format(i))
-#                 n_dt = 1
-#                 state = testenv.get_current_state(n_dt)
-#                 #action = actornetwork(state)
+            # Section 1: Run simulation for n_steps
+            n_steps = 5000
+            print("Simulation Start")
+            tot_reward = 0
+            sum_action = np.zeros((testenv.N, testenv.D))
+            print("initial pos: {}".format(testenv.r.flatten()))
+            print("initial vel: {}".format(testenv.v.flatten()))
+            print(f"initial velo: {testenv.v_average}")
+            print(f"intial mean velo: {np.mean(testenv.v, axis = 0)}")
+            for i in range(n_steps):
+                # print("Step {}".format(i))
+                n_dt = 1
+                state = testenv.get_current_state(n_dt)
+                #action = actornetwork(state)
 
 # #                 action = testenv.compute_forces(testenv.r)  # Replace this action with the action from the actor network
 # #                 next_state, reward, done = testenv.step(action, n_dt)
@@ -283,27 +293,27 @@ class rlmc_env:
 # #                 tot_reward += reward
 # #                 sum_action += action
 
-#                 if i%100 == 0: 
-#                     print("Step{} reward: {}".format(i, reward))
-#                     # print(f"\t  center: {testenv.center + testenv.v_average* i * testenv.dt}")
-#                     # print(f"\t  mean: {np.mean(testenv.r, axis = 0)}")
-#             print("final pos: {}".format(testenv.r.flatten()))
-#             print("final vel: {}".format(testenv.v.flatten()))
-#             print("Reward: {}".format(tot_reward))
-#             print()
+                if i%100 == 0: 
+                    print("Step{} reward: {}".format(i, reward))
+                    # print(f"\t  center: {testenv.center + testenv.v_average* i * testenv.dt}")
+                    # print(f"\t  mean: {np.mean(testenv.r, axis = 0)}")
+            print("final pos: {}".format(testenv.r.flatten()))
+            print("final vel: {}".format(testenv.v.flatten()))
+            print("Reward: {}".format(tot_reward))
+            print()
 
-#             # Section 2: Step simulation forward by n_steps
-#             # testenv.reset()
-#             # print("initial pos: {}".format(testenv.r.flatten()))
-#             # print("initial vel: {}".format(testenv.v.flatten()))
-#             # next_state, reward, done = testenv.step(sum_action, n_steps)
-#             # print("final pos: {}".format(testenv.r.flatten()))
-#             # print("final vel: {}".format(testenv.v.flatten()))
-#             # print("Reward: {}".format(reward))
+            # Section 2: Step simulation forward by n_steps
+            # testenv.reset()
+            # print("initial pos: {}".format(testenv.r.flatten()))
+            # print("initial vel: {}".format(testenv.v.flatten()))
+            # next_state, reward, done = testenv.step(sum_action, n_steps)
+            # print("final pos: {}".format(testenv.r.flatten()))
+            # print("final vel: {}".format(testenv.v.flatten()))
+            # print("Reward: {}".format(reward))
 
-#             # # Example of how to get current state
-#             # state = testenv.get_current_state(n_steps)
-#             # print("Current state: {}".format(state))
+            # # Example of how to get current state
+            # state = testenv.get_current_state(n_steps)
+            # print("Current state: {}".format(state))
 
 # #         case "finddts":
 # #             """Acceptable dt for each N"""
@@ -315,5 +325,5 @@ class rlmc_env:
 # #             for n, dt in zip(N_list, dt_baselines):
 # #                 print("({}, {})".format(n, dt))
 
-#         case _:
-#             print("Not a valid case")
+        case _:
+            print("Not a valid case")
