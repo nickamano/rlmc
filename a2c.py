@@ -4,9 +4,10 @@ import torch.optim as optim
 from env import *
 import torch.distributions as dist
 import torch.nn.functional as F
+import os
 
 class Actor(nn.Module):
-        def __init__(self, state_dim, action_dim, temp=1.0):
+        def __init__(self, state_dim, action_dim, max_abs_action=4, temp=1.0):
             super(Actor, self).__init__()
             self.fc = nn.Linear(state_dim, 256)
             self.relu = nn.ReLU()
@@ -14,13 +15,15 @@ class Actor(nn.Module):
             self.fc_std = nn.Linear(256, action_dim)
             self.tanh = nn.Tanh()
             self.temp = temp
+            self.max_abs_action = max_abs_action
 
         def forward(self, state):
             x = self.relu(self.fc(state))
             mu = self.fc_mu(x)
             std_pre_softmax = self.fc_std(x)
             std = F.softmax(std_pre_softmax / self.temp, dim=-1)
-            return dist.Normal(mu, std)
+            distr = dist.Normal(mu, std).sample()
+            return self.max_abs_action * torch.tanh(distr)
 
 class Critic(nn.Module):
     def __init__(self, state_dim):
@@ -62,9 +65,9 @@ class A2C(object):
             state = self.env.get_current_state(self.n_dt)
             for iter in range(self.max_iterations):
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
-                action_distribution = self.actor(state_tensor)
-                forces = action_distribution.sample()
-                log_probs = action_distribution.log_prob(forces).sum()
+                forces = self.actor(state_tensor)
+                # forces = action_distribution.sample()
+                log_probs = forces.log_prob(forces).sum()
                 next_state, reward, done = self.env.step(forces.detach().numpy().flatten(), self.n_dt)
                 next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
                 value = self.critic(state_tensor)
@@ -88,13 +91,19 @@ class A2C(object):
             
         
     def save(self):
+        if not os.path.exists("pth"):
+            os.mkdir("pth")
+
         path = f"pth/{self.model_name}_a2c.pth"
         torch.save(self.actor.to("cpu").state_dict(), path)
 
-
-# model_name = "N-spring2D_N=5_dt=0.001"
-# testenv = rlmc_env("N-spring2D", 5, 0.001)
-# agent = A2C(model_name=model_name, temp=1, testenv=testenv, num_episode=75, max_iterations=300, n_dt=1)
-# agent.initialization()
-# agent.train()
-# agent.save()
+model_name = "N-spring2D"
+N = 3
+dt = 0.001
+reward_flag = "threshold energy"
+model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
+testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
+agent = A2C(model_name=model_name, temp=1, testenv=testenv, num_episode=50, max_iterations=400, n_dt=1)
+agent.initialization()
+agent.train()
+agent.save()
