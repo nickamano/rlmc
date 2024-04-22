@@ -7,7 +7,7 @@ import torch.nn.functional as F
 import os
 
 class Actor(nn.Module):
-        def __init__(self, state_dim, action_dim, max_abs_action=4, temp=1.0):
+        def __init__(self, state_dim, action_dim, max_abs_action, temp=1.0):
             super(Actor, self).__init__()
             self.fc = nn.Linear(state_dim, 256)
             self.relu = nn.ReLU()
@@ -16,14 +16,17 @@ class Actor(nn.Module):
             self.tanh = nn.Tanh()
             self.temp = temp
             self.max_abs_action = max_abs_action
+            
 
         def forward(self, state):
-            x = self.relu(self.fc(state))
-            mu = self.fc_mu(x)
-            std_pre_softmax = self.fc_std(x)
+            x1 = self.relu(self.fc(state))
+            x2 = self.max_abs_action * self.relu(self.tanh(x1))
+            # x1 = self.relu(self.max_abs_action * self.tanh(state))
+            # x2 = self.fc(x1)
+            mu = self.fc_mu(x2)
+            std_pre_softmax = self.fc_std(x2)
             std = F.softmax(std_pre_softmax / self.temp, dim=-1)
-            distr = dist.Normal(mu, std).sample()
-            return self.max_abs_action * torch.tanh(distr)
+            return dist.Normal(mu, std)
 
 class Critic(nn.Module):
     def __init__(self, state_dim):
@@ -38,13 +41,13 @@ class Critic(nn.Module):
         return self.network(state)
         
 class A2C(object):
-    def __init__(self, model_name, temp, testenv, num_episode=10, max_iterations=1000, n_dt=1):
+    def __init__(self, model_name, temp, testenv, num_episode=10, max_iterations=1000, max_abs_action=4, n_dt=1):
         self.state_dim = testenv.N * testenv.D * 2 + 1
         self.action_dim = testenv.N * testenv.D
         self.temp = temp
         self.env = testenv
         self.model_name = model_name
-        self.actor = Actor(self.state_dim, self.action_dim, temp)
+        self.actor = Actor(self.state_dim, self.action_dim, max_abs_action,temp)
         self.critic = Critic(self.state_dim)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.001)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=0.001)
@@ -65,9 +68,9 @@ class A2C(object):
             state = self.env.get_current_state(self.n_dt)
             for iter in range(self.max_iterations):
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
-                forces = self.actor(state_tensor)
-                # forces = action_distribution.sample()
-                log_probs = forces.log_prob(forces).sum()
+                action_distribution = self.actor(state_tensor)
+                forces = action_distribution.sample()
+                log_probs = action_distribution.log_prob(forces).sum()
                 next_state, reward, done = self.env.step(forces.detach().numpy().flatten(), self.n_dt)
                 next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
                 value = self.critic(state_tensor)
@@ -98,12 +101,12 @@ class A2C(object):
         torch.save(self.actor.to("cpu").state_dict(), path)
 
 model_name = "N-spring2D"
-N = 3
+N = 10
 dt = 0.001
-reward_flag = "threshold energy"
+reward_flag = "initial energy"
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
-agent = A2C(model_name=model_name, temp=1, testenv=testenv, num_episode=50, max_iterations=400, n_dt=1)
+agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=50, max_iterations=300, n_dt=1)
 agent.initialization()
 agent.train()
 agent.save()
