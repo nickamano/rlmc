@@ -58,20 +58,28 @@ if __name__ == "__main__":
     #         print("Episode {} average score: {}".format(episode, sum(scores_env[-10:]) / 10))
 
     # plot2(scores, scores_env, 10, model_name)
-    
+    """
+    Paste infor from train_model here
+    """
     sim_type = "N-spring2D"
     N = 3
     dt_ = 0.005
     reward_type = "threshold_energy"
+    model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
+    """
+    End Paste
+    """
+
+    actor_network_episode_number = 100
 
     env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
     env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
 
     state_dim, action_dim = env_actor.NNdims()
     max_abs_action = 1000
-    model_name = "N-spring2D_N=10_dt=0.001_trials_threshold400"
+    actor_model_name = "{}{}".format(model_name, actor_network_episode_number)
     # Load torch model
-    model = torch.load("pth/" + model_name + ".pth")
+    model = torch.load("pth/" + actor_model_name + ".pth")
     agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
                  gamma=0.99, tau=0.002)
     agent.actor = model
@@ -110,5 +118,5 @@ if __name__ == "__main__":
         state_actor = next_state_actor
         state_target = next_state_target
 
-    visualize(np.array(positions_actor), ['b', 'k', 'r'], "Nspring_actor.gif")
-    visualize(np.array(positions_target), ['b', 'k', 'r'], "Nspring_target.gif")
+    visualize(np.array(positions_actor), ['b', 'k', 'r'], "Nspring_actor{}.gif".format(actor_network_episode_number))
+    visualize(np.array(positions_target), ['b', 'k', 'r'], "Nspring_target{}.gif".format(actor_network_episode_number))
