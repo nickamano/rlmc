@@ -66,6 +66,7 @@ def visualize(positions, colors, name, xlim=(-5,10), ylim=(-5, 10)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
+    ax.set_title(name)
 
 
 def save_model(actor, name):
