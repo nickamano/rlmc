@@ -63,6 +63,7 @@ def visualize(positions, colors, name, xlim=(-5,10), ylim=(-5, 10)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
+    ax.set_title(name)
 
     scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', c=colors, s=1000)
 
