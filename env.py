@@ -7,7 +7,7 @@ class rlmc_env:
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
 
-    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold energy") -> None:
+    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold_energy") -> None:
         self.max_int = 65535
         self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
@@ -258,12 +258,11 @@ class rlmc_env:
 if __name__ == "__main__":
     import sys
     runtype = sys.argv[1]
-    flag = sys.argv[2]
     
     match runtype:
         case "demo":
             # Initialize Environment for 2D N-body spring simulation
-            testenv = rlmc_env("N-spring2D", 10, 0.005, flag)
+            testenv = rlmc_env("N-spring2D", 50, 0.00001, "threshold_energy")
 
             # Intialize Starting Positions and Velocities
             testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
@@ -273,7 +272,7 @@ if __name__ == "__main__":
 # #             testenv.set_initial_energies()
 
             # Section 1: Run simulation for n_steps
-            n_steps = 5000
+            n_steps = 3000
             print("Simulation Start")
             tot_reward = 0
             sum_action = np.zeros((testenv.N, testenv.D))
