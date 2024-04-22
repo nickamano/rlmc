@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     # plot2(scores, scores_env, 10, model_name)
     """
-    Paste infor from train_model here
+    Paste info from train_model here
     """
     sim_type = "N-spring2D"
     N = 3
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     End Paste
     """
 
-    actor_network_episode_number = 100
+    actor_network_episode_number = 300
 
     env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
     env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env

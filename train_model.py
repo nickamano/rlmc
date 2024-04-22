@@ -2,15 +2,31 @@ from env import rlmc_env
 from ddpg import *
 from utils import *
 
+import signal
+import sys
+
+def handler(sig, frame):
+    print('Ctrl+C Exit')
+    list2txt(scores, model_name)
+    plot1(scores, pretrain_episodes, 10, model_name)
+    sys.exit(0)
 
 if __name__ == "__main__":
+    default_handler = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, handler)
+    """
+    Copy this info to test_model.py
+    """
     sim_type = "N-spring2D"
     N = 3
     dt_ = 0.005
     reward_type = "threshold_energy"
+    model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
+    """
+    end copy
+    """
 
     env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
-    model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     print(model_name)
     state_dim, action_dim = env.NNdims()
     max_abs_action = 10
@@ -51,5 +67,5 @@ if __name__ == "__main__":
             save_model(agent.actor, model_name + str(episode))
 
 
-    list2txt(scores, model_name + str(trial))
-    plot1(scores, pretrain_episodes, 10, model_name+str(trial))
+    list2txt(scores, model_name)
+    plot1(scores, pretrain_episodes, 10, model_name)    
