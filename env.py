@@ -125,7 +125,7 @@ class rlmc_env:
         """
         return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt)
 
-    def step(self, forces: npt.ArrayLike, n_dt: int) -> tuple[npt.ArrayLike, float, bool]:
+    def step(self, forces: npt.ArrayLike, n_dt: int, offline: bool = False) -> tuple[npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation
         Input:
@@ -155,10 +155,15 @@ class rlmc_env:
                     v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
 
                 # Lazy step
-                _, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+                if offline:
+                    actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+                    self.v, self.r = (v_target, r_target)
+
+                else:
+                    self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
                 # Calculate Reward
-                reward = self.reward(r_target, self.v, self.r)
+                reward = self.reward( r_target,  actor_v, actor_r)
 
                 return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
 
