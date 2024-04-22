@@ -70,7 +70,7 @@ if __name__ == "__main__":
     End Paste
     """
 
-    actor_network_episode_number = 300
+    actor_network_episode_number = 450
 
     env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
     env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
@@ -118,5 +118,5 @@ if __name__ == "__main__":
         state_actor = next_state_actor
         state_target = next_state_target
 
-    visualize(np.array(positions_actor), ['b', 'k', 'r'], "Nspring_actor{}.gif".format(actor_network_episode_number))
-    visualize(np.array(positions_target), ['b', 'k', 'r'], "Nspring_target{}.gif".format(actor_network_episode_number))
+    visualize(np.array(positions_actor), ['b', 'k', 'r'], "{}_actor_{}.gif".format(model_name, actor_network_episode_number))
+    visualize(np.array(positions_target), ['b', 'k', 'r'], "{}_target_{}.gif".format(model_name, actor_network_episode_number))
