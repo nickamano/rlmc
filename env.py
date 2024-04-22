@@ -175,8 +175,8 @@ class rlmc_env:
         """
         Utilizes the euler method to itegrate the velocity and position with the given forces
         """
-        next_v = v + force/self.m * dt
-        next_r = r + v * dt
+        next_v = v + force / self.m * dt
+        next_r = r + next_v * dt
         return (next_v, next_r)
 
     def reward(self, r_target, v_predict, r_predict):
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     match runtype:
         case "demo":
             # Initialize Environment for 2D N-body spring simulation
-            testenv = rlmc_env("N-spring2D", 5, 0.00005)
+            testenv = rlmc_env("N-spring2D", 10, 0.005)
 
             # Intialize Starting Positions and Velocities
             testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
@@ -259,7 +259,7 @@ if __name__ == "__main__":
                     print("Step{} reward: {}".format(i, reward))
             print("final pos: {}".format(testenv.r.flatten()))
             print("final vel: {}".format(testenv.v.flatten()))
-            print("Reward: {}".format(tot_reward))
+            print("Reward: {}".format(tot_reward/n_steps))
             print()
 
             # Section 2: Step simulation forward by n_steps
