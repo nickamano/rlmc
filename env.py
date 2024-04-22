@@ -150,6 +150,8 @@ class rlmc_env:
                 # Simulation steps
                 v_target = np.copy(self.v)
                 r_target = np.copy(self.r)
+                actor_v = np.copy(self.v)
+                actor_r = np.copy(self.r)
                 for _ in range(n_dt):
                     target_action = self.compute_forces(r_target)
                     v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
