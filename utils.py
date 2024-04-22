@@ -1,8 +1,8 @@
 import os
 import matplotlib.pyplot as plt
+from matplotlib import animation
 import numpy as np
 import torch
-
 
 def list2txt(mylist, name):
     folder_path = "txt"
@@ -59,6 +59,21 @@ def plot2(scores, scores_env, average_n, name):
     plt.legend(loc='lower right')
     plt.show()
 
+def visualize(positions, colors, name):
+    # Setup the figure and axes...
+    fig, ax = plt.subplots(figsize=(6,6))
+    ax.set(xlim=(-5, 5), ylim=(-5, 5))
+
+    scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', c=colors, s=1000)
+
+    def animate(i):
+        scat.set_offsets(positions[i])
+
+    ani = animation.FuncAnimation(fig, animate, frames=1000)
+
+    plt.close()
+    # this function will create a lot of *.png files in a folder '3Body_frames'
+    ani.save(name, writer='ffmpeg', fps=60)
 
 def save_model(actor, name):
     model = actor

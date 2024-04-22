@@ -58,3 +58,21 @@ if __name__ == "__main__":
             print("Episode {} average score: {}".format(episode, sum(scores_env[-10:]) / 10))
 
     plot2(scores, scores_env, 10, model_name)
+    
+    episodes = 1
+    steps = 300
+    scores = []
+    positions = []
+    env.reset_random(5.0)
+    state = env.get_current_state(n_dt=1)
+    score = 0
+    done = False
+    for step in range(steps):
+        action = agent.choose_action(state)
+        # print(action)
+        next_state, reward, _ = env.step(action, n_dt=1)
+        positions.append(env.r)
+        score += reward
+        state = next_state
+    
+    visulaize(np.array(positions), ['b', 'k', 'r', 'c', 'm', 'b', 'k', 'r', 'c', 'm'], "N-spring2D_N=10_dt=0001_vis.gif")
