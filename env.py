@@ -201,29 +201,20 @@ class rlmc_env:
 
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_predict + U_predict
+
         match self.reward_flag:
-            case "initial_energy":
+            case "intial energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
-            case "threshold_energy":
+            case "threshold energy":
                 if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
-                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
                 else:
-                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "no_energy":
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "no energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold_moving_energy":
+            case "threshold moving energy":
                 # TODO
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold_center_of_grav":
-                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .1):
-                    reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) \
-                            - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-                else:
-                    reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() \
-                    - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-            case "center_of_grav":
-                reward = - np.abs(np.subtract(r_target, r_predict)).mean() \
-                         - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
             
         return reward
 
