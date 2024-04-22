@@ -69,7 +69,7 @@ def visualize(positions, colors, name):
     def animate(i):
         scat.set_offsets(positions[i])
 
-    ani = animation.FuncAnimation(fig, animate, frames=1000)
+    ani = animation.FuncAnimation(fig, animate, frames=positions.shape[0])
 
     plt.close()
     # this function will create a lot of *.png files in a folder '3Body_frames'
