@@ -20,7 +20,7 @@ if __name__ == "__main__":
     sim_type = "N-spring2D"
     N = 3
     dt_ = 0.005
-    reward_type = "threshold_energy"
+    reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     end copy
