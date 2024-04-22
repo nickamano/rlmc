@@ -192,8 +192,10 @@ class rlmc_env:
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_predict + U_predict
 
-        reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(
-            total_energy_init - total_energy_pred)  # Add short term energy reward
+        if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
+            reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+        else:
+            reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
         return reward
 
     def compute_total_U(self, r):
