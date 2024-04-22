@@ -69,7 +69,7 @@ if __name__ == "__main__":
     End Paste
     """
 
-    actor_network_episode_number = 450
+    actor_network_episode_number = 150
 
     env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
     env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
@@ -89,6 +89,9 @@ if __name__ == "__main__":
 
     positions_actor = []
     positions_target = []
+
+    actions_actor = []
+    actions_target = []
     
     env_target.reset_random(5.0)
     # env_actor.reset_random(5.0)
@@ -107,15 +110,23 @@ if __name__ == "__main__":
         action_actor = agent.choose_action(state_actor)
         action_target = env_target.compute_forces(env_target.r)
 
-        next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1)
-        next_state_target, reward_target, _ = env_target.step(action_target, n_dt=1)
+        next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1, offline=False)
+        next_state_target, reward_target, _ = env_target.step(action_target, n_dt=1, offline=False)
 
         if step % 20 == 0:
             positions_actor.append(env_actor.r)
             positions_target.append(env_target.r)
 
+            actions_actor.append(action_actor)
+            actions_target.append(action_target)
+
         state_actor = next_state_actor
         state_target = next_state_target
+
+    pos_diff = [a - t for a, t in zip(positions_actor, positions_target)]
+    act_diff = [a - t.flatten() for a, t in zip(actions_actor, actions_target)]
+    print("pos_diff", pos_diff)
+    print("act_diff", act_diff)
 
     visualize(np.array(positions_actor), ['b', 'k', 'r'], "{}_actor_{}.gif".format(model_name, actor_network_episode_number))
     visualize(np.array(positions_target), ['b', 'k', 'r'], "{}_target_{}.gif".format(model_name, actor_network_episode_number))
