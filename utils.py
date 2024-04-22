@@ -33,6 +33,7 @@ def plot1(scores, pretrain_episodes, average_n, name):
     plt.grid(True)
     plt.legend(loc='lower right')
     plt.show()
+    # plt.savefig('')
 
 
 def plot2(scores, scores_env, average_n, name):
@@ -58,6 +59,10 @@ def plot2(scores, scores_env, average_n, name):
     plt.grid(True)
     plt.legend(loc='lower right')
     plt.show()
+    if not os.path.exists('plots'):
+        os.mkdir('plots')
+
+    plt.savefig(f'plots/plot2-{name}.png')
 
 
 def save_model(actor, name):
