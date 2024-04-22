@@ -117,5 +117,5 @@ if __name__ == "__main__":
         state_actor = next_state_actor
         state_target = next_state_target
 
-    visualize(np.array(positions_actor), ['b', 'k', 'r'], "Nspring_actor.gif")
-    visualize(np.array(positions_target), ['b', 'k', 'r'], "Nspring_target.gif")
+    visualize(np.array(positions_actor), ['b', 'k', 'r'], "{}_actor_{}.gif".format(model_name, actor_network_episode_number))
+    visualize(np.array(positions_target), ['b', 'k', 'r'], "{}_target_{}.gif".format(model_name, actor_network_episode_number))
