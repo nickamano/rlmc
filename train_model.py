@@ -19,9 +19,9 @@ if __name__ == "__main__":
     """
     Copy this info to test_model.py
     """
-    sim_type = "N-lj2D"
-    N = 10
-    dt_ = 0.001
+    sim_type = "N-spring2D"
+    N = 3
+    dt_ = 0.005
     reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
