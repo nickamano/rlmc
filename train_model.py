@@ -5,18 +5,27 @@ import numpy as np
 
 
 if __name__ == "__main__":
-    env = rlmc_env("N-spring2D", 5, 0.005)  # Creat env
+    sim_type = "N-spring2D"
+    N = 3
+    dt_ = 0.005
+    reward_type = "threshold_energy"
+
+    env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+    model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
+    print(model_name)
     state_dim, action_dim = env.NNdims()
-    max_abs_action = 0.75
-    converge_score = -70
+    max_abs_action = 4
+    converge_score = -200
     # Create DDPG Agent
-    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=256, hidden_width1=128, batch_size=256, lr=0.001,
-                 gamma=0.99, tau=0.005)
+    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
+                 gamma=0.99, tau=0.002)
     print("Simulation Start")
+
     episodes = 2000
-    pretrain_episodes = 100
-    steps = 300
+    pretrain_episodes = 10
+    steps = 2000
     scores = []
+
     rb = ReplayBuffer(state_dim, action_dim)
     for episode in range(episodes + pretrain_episodes):
         env.reset_random(1.0)
@@ -39,7 +48,9 @@ if __name__ == "__main__":
             print("Episode {} average score: {}".format(episode, sum(scores[-10:]) / 10))
         if episode > 200 and sum(scores[-50:]) / 50 > converge_score:
             break
+        if episode % 50 == 0:
+            save_model(agent.actor, model_name + str(episode))
 
-    save_model(agent.actor, "N-spring2D_N=5_dt=0.005")
-    list2txt(scores, "N-spring2D_N=5_dt=0.005")
-    plot1(scores, pretrain_episodes, 10, "N-spring2D_N=5_dt=0.005")
+
+    list2txt(scores, model_name + str(trial))
+    plot1(scores, pretrain_episodes, 10, model_name+str(trial))

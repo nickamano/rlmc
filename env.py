@@ -31,8 +31,10 @@ class rlmc_env:
 
                 self.r_init = np.zeros((self.N, self.D))
                 self.v_init = np.zeros((self.N, self.D))
-                self.v = self.r_init
-                self.r = self.v_init
+                self.v = self.v_init
+                self.r = self.r_init
+                self.center = self.r.mean(axis = 0)
+                self.v_average = self.v.mean(axis = 0)
                 self.terminate = False
 
                 self.U_init = 0
@@ -48,7 +50,7 @@ class rlmc_env:
         Return the input and output dimensions of the simulation.
         Use for defining NN input and output sizes
         """
-        in_dim = 2 * self.N * self.D + 1
+        in_dim = self.N * self.D + 1
         out_dim = self.N * self.D
         return in_dim, out_dim
     
@@ -61,6 +63,8 @@ class rlmc_env:
 
                 self.v = self.v_init
                 self.r = self.r_init
+                self.center = self.r.mean(axis = 0)
+                self.v_average = self.v.mean(axis = 0)
                 self.ts = 0
                 self.terminate = False
 
@@ -75,7 +79,7 @@ class rlmc_env:
             case "N-spring2D":
 
                 self.r_init = max_dist * np.random.rand(self.N, self.D)
-                self.v_init = np.zeros((self.N, self.D))
+                self.v_init = np.random.normal(0,1, (self.N, self.D))
 
                 self.reset()
     
@@ -94,6 +98,7 @@ class rlmc_env:
             raise IndexError("Shape must match shape of system")
         self.r_init = pos
         self.r = self.r_init
+        self.center = self.r.mean(axis = 0)
 
     def set_initial_vel(self, vel: npt.ArrayLike) -> None:
         """
@@ -103,6 +108,7 @@ class rlmc_env:
             raise IndexError("Shape must match shape of system")
         self.v_init = vel
         self.v = self.v_init
+        self.v_average = self.v.mean(axis = 0)
 
     def set_initial_energies(self):
         """
@@ -116,9 +122,9 @@ class rlmc_env:
         """
         Return current state as an flattened array
         """
-        return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt)
+        return np.append(self.r.flatten(), self.dt * n_dt)
 
-    def step(self, forces: npt.ArrayLike, n_dt: int) -> tuple[npt.ArrayLike, float, bool]:
+    def step(self, forces: npt.ArrayLike, n_dt: int, offline: bool = True) -> tuple[npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation 
         Input:
@@ -143,18 +149,25 @@ class rlmc_env:
                 # Simulation steps
                 v_target = np.copy(self.v)
                 r_target = np.copy(self.r)
-                for _  in range(n_dt):
+                actor_v = np.copy(self.v)
+                actor_r = np.copy(self.r)
+                for _ in range(n_dt):
                     target_action = self.compute_forces(r_target)
                     v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
                 
                 # Lazy step
-                self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+                if offline:
+                    actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+                    self.v, self.r = (v_target, r_target)
+
+                else:
+                    self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
                 # Calculate Reward
-                reward = self.reward(r_target, self.v, self.r)
+                reward = self.reward( r_target, actor_v, actor_r)
 
-                return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
-        
+                return np.append(self.r.flatten(), self.dt * n_dt), reward, done
+
     def compute_forces(self, r) -> npt.ArrayLike:
         """
         The function computes forces on each particle at time step n
@@ -190,18 +203,28 @@ class rlmc_env:
         total_energy_pred = K_predict + U_predict
 
         match self.reward_flag:
-            case "intial energy":
+            case "intial_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
-            case "threshold energy":
+            case "threshold_energy":
                 if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
-                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
                 else:
-                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "no energy":
+                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "no_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold moving energy":
+            case "threshold_moving_energy":
                 # TODO
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+            case "threshold_center_of_grav":
+                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .1):
+                    reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) \
+                            - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+                else:
+                    reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() \
+                    - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+            case "center_of_grav":
+                reward = - np.abs(np.subtract(r_target, r_predict)).mean() \
+                         - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
             
         return reward
 
@@ -231,72 +254,76 @@ class rlmc_env:
                 for i in range(self.N):
                     K +=(self.m/2) * (v[i] * v[i]).sum()
         return K
-
-
+      
 # if __name__ == "__main__":
 #     import sys
 #     runtype = sys.argv[1]
+#     flag = sys.argv[2]
     
 #     match runtype:
 #         case "demo":
 #             # Initialize Environment for 2D N-body spring simulation
-#             testenv = rlmc_env("N-spring2D", 10, 0.005)
+#             testenv = rlmc_env("N-spring2D", 10, 0.005, flag)
 
 #             # Intialize Starting Positions and Velocities
 #             testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
-#             testenv.set_initial_vel(np.zeros((testenv.N, testenv.D)))
+#             testenv.set_initial_vel(np.random.normal(0,1, (testenv.N, testenv.D)))
 
-#             # Set Initial Energy
-#             testenv.set_initial_energies()
+# #             # Set Initial Energy
+# #             testenv.set_initial_energies()
 
 #             # Section 1: Run simulation for n_steps
-#             n_steps = 1000
+#             n_steps = 5000
 #             print("Simulation Start")
 #             tot_reward = 0
 #             sum_action = np.zeros((testenv.N, testenv.D))
 #             print("initial pos: {}".format(testenv.r.flatten()))
 #             print("initial vel: {}".format(testenv.v.flatten()))
+#             print(f"initial velo: {testenv.v_average}")
+#             print(f"intial mean velo: {np.mean(testenv.v, axis = 0)}")
 #             for i in range(n_steps):
 #                 # print("Step {}".format(i))
 #                 n_dt = 1
 #                 state = testenv.get_current_state(n_dt)
 #                 #action = actornetwork(state)
 
-#                 action = testenv.compute_forces(testenv.r)  # Replace this action with the action from the actor network
-#                 next_state, reward, done = testenv.step(action, n_dt)
+# #                 action = testenv.compute_forces(testenv.r)  # Replace this action with the action from the actor network
+# #                 next_state, reward, done = testenv.step(action, n_dt)
 
-#                 tot_reward += reward
-#                 sum_action += action
+# #                 tot_reward += reward
+# #                 sum_action += action
 
-#                 if i%100 == 0:
+#                 if i%100 == 0: 
 #                     print("Step{} reward: {}".format(i, reward))
+#                     # print(f"\t  center: {testenv.center + testenv.v_average* i * testenv.dt}")
+#                     # print(f"\t  mean: {np.mean(testenv.r, axis = 0)}")
 #             print("final pos: {}".format(testenv.r.flatten()))
 #             print("final vel: {}".format(testenv.v.flatten()))
-#             print("Reward: {}".format(tot_reward/n_steps))
+#             print("Reward: {}".format(tot_reward))
 #             print()
 
 #             # Section 2: Step simulation forward by n_steps
-#             testenv.reset()
-#             print("initial pos: {}".format(testenv.r.flatten()))
-#             print("initial vel: {}".format(testenv.v.flatten()))
-#             next_state, reward, done = testenv.step(sum_action, n_steps)
-#             print("final pos: {}".format(testenv.r.flatten()))
-#             print("final vel: {}".format(testenv.v.flatten()))
-#             print("Reward: {}".format(reward))
+#             # testenv.reset()
+#             # print("initial pos: {}".format(testenv.r.flatten()))
+#             # print("initial vel: {}".format(testenv.v.flatten()))
+#             # next_state, reward, done = testenv.step(sum_action, n_steps)
+#             # print("final pos: {}".format(testenv.r.flatten()))
+#             # print("final vel: {}".format(testenv.v.flatten()))
+#             # print("Reward: {}".format(reward))
 
-#             # Example of how to get current state
-#             state = testenv.get_current_state(n_steps)
-#             print("Current state: {}".format(state))
+#             # # Example of how to get current state
+#             # state = testenv.get_current_state(n_steps)
+#             # print("Current state: {}".format(state))
 
-#         case "finddts":
-#             """Acceptable dt for each N"""
-#             N_list = [5, 10, 20, 50, 100]
-#             dt_baselines = [0.005, 0.00005, 0.000005, 0.0000001, 0.00000005]
-#             dt_dict = dict(zip(N_list, dt_baselines))
+# #         case "finddts":
+# #             """Acceptable dt for each N"""
+# #             N_list = [5, 10, 20, 50, 100]
+# #             dt_baselines = [0.005, 0.00005, 0.000005, 0.0000001, 0.00000005]
+# #             dt_dict = dict(zip(N_list, dt_baselines))
 
-#             print("(N, dt):")
-#             for n, dt in zip(N_list, dt_baselines):
-#                 print("({}, {})".format(n, dt))
+# #             print("(N, dt):")
+# #             for n, dt in zip(N_list, dt_baselines):
+# #                 print("({}, {})".format(n, dt))
 
 #         case _:
 #             print("Not a valid case")

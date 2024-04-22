@@ -103,7 +103,7 @@ class A2C(object):
 model_name = "N-spring2D"
 N = 10
 dt = 0.001
-reward_flag = "initial energy"
+reward_flag = "initial_energy"
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
 agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=50, max_iterations=300, n_dt=1)

@@ -62,7 +62,10 @@ def plot2(scores, scores_env, average_n, name):
     if not os.path.exists('plots'):
         os.mkdir('plots')
 
-    plt.savefig(f'plots/plot2-{name}.png')
+def visualize(positions, colors, name, xlim=(-5,10), ylim=(-5, 10)):
+    # Setup the figure and axes...
+    fig, ax = plt.subplots(figsize=(6,6))
+    ax.set(xlim=xlim, ylim=ylim)
 
 
 def save_model(actor, name):
