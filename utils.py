@@ -59,10 +59,10 @@ def plot2(scores, scores_env, average_n, name):
     plt.legend(loc='lower right')
     plt.show()
 
-def visualize(positions, colors, name):
+def visualize(positions, colors, name, xlim=(-5, 5), ylim=(-5, 5)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
-    ax.set(xlim=(-5, 5), ylim=(-5, 5))
+    ax.set(xlim=xlim, ylim=ylim)
 
     scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', c=colors, s=1000)
 
