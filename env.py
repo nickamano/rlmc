@@ -202,7 +202,7 @@ class rlmc_env:
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_predict + U_predict
         match self.reward_flag:
-            case "intial_energy":
+            case "initial_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
             case "threshold_energy":
                 if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
