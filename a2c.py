@@ -21,10 +21,10 @@ class Actor(nn.Module):
             
 
         def forward(self, state):
-            # x1 = self.relu(self.fc(state))
-            # x2 = self.relu(self.max_abs_action * self.tanh(x1))
-            x1 = self.relu(self.max_abs_action * self.tanh(state))
-            x2 = self.fc(x1)
+            x1 = self.relu(self.fc(state))
+            x2 = self.relu(self.max_abs_action * self.tanh(x1))
+            # x1 = self.relu(self.max_abs_action * self.tanh(state))
+            # x2 = self.fc(x1)
             mu = self.fc_mu(x2)
             std_pre_softmax = self.fc_std(x2)
             std = F.softmax(std_pre_softmax / self.temp, dim=-1)
@@ -70,14 +70,14 @@ class A2C(object):
     def train(self):
         scores = []
         for ep in range(self.num_epidoes):
-            self.env.reset_random(max_dist=3)
+            self.env.reset_random(max_dist=5)
             score = 0
             state = self.env.get_current_state(self.n_dt)
             for iter in range(self.max_iterations):
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
                 action_distribution = self.actor(state_tensor)
                 forces = action_distribution.sample()
-                forces = F.softmax(forces)
+                # forces = F.softmax(forces)
                 # forces = self.actor(state_tensor)
                 log_probs = action_distribution.log_prob(forces).sum()
                 next_state, reward, done = self.env.step(forces.detach().numpy().flatten(), self.n_dt)
@@ -114,9 +114,9 @@ class A2C(object):
 
 torch.autograd.set_detect_anomaly(True)
 model_name = "N-spring2D"
-N = 10
+N = 5
 dt = 0.001
-reward_flag = "initial_energy"
+reward_flag = "threshold_energy"
 # assert reward_flag == "initial_energy" or reward_flag == "threshold_energy" or reward_flag
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
