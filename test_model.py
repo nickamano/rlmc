@@ -76,13 +76,19 @@ if __name__ == "__main__":
 
     state_dim, action_dim = env_actor.NNdims()
     max_abs_action = 1000
-    model_name = "N-spring2D_N=10_dt=0.001_trials_threshold400"
+    # model_name = "N-spring2D_N=10_dt=0.001_trials_threshold400"
+    model_name = "N-spring2D_N=10_dt=0.001_initial_energy"
     # Load torch model
-    model = torch.load("pth/" + model_name + ".pth")
+    actor_params = torch.load("pth/" + model_name + "_a2c.pth")
     # agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
     #              gamma=0.99, tau=0.002)
     # agent.actor = model
-
+    actor = Actor(
+        state_dim=state_dim,
+        action_dim=action_dim,
+        max_abs_action=max_abs_action
+    )
+    actor.load_state_dict(actor_params)
     print("Simulation Start (from Actor)")
     episodes = 1
     steps = 2000
@@ -107,7 +113,8 @@ if __name__ == "__main__":
 
     done = False
     for step in range(steps):
-        action_actor = agent.choose_action(state_actor)
+        # action_actor = agent.choose_action(state_actor)
+        action_actor = actor(state_actor)
         action_target = env_target.compute_forces(env_target.r)
 
         next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1, offline=False)
