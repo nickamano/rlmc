@@ -20,7 +20,7 @@ if __name__ == "__main__":
     Copy this info to test_model.py
     """
     sim_type = "N-spring2D"
-    N = 3
+    N = 5
     dt_ = 0.005
     reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
@@ -69,7 +69,6 @@ if __name__ == "__main__":
             break
         if episode % 50 == 0:
             save_model(agent.actor, model_name + str(episode))
-
 
     list2txt(scores, model_name)
     plot1(scores, pretrain_episodes, 10, model_name)    

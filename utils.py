@@ -62,12 +62,22 @@ def plot2(scores, scores_env, average_n, name):
     if not os.path.exists('plots'):
         os.mkdir('plots')
 
-def visualize(positions, colors, name, xlim=(-5,10), ylim=(-5, 10)):
+def visualize(positions, colormap, c, name, xlim=(-5,15), ylim=(-5, 15)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
     ax.set_title(name)
 
+    scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', cmap=colormap, c=c, s=1000) #, c=colors
+
+    def animate(i):
+        scat.set_offsets(positions[i])
+
+    ani = animation.FuncAnimation(fig, animate, frames=positions.shape[0])
+
+    plt.close()
+    # this function will create a lot of *.png files in a folder '3Body_frames'
+    ani.save(name, writer='ffmpeg', fps=60)
 
 def save_model(actor, name):
     model = actor
