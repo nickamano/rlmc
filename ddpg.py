@@ -16,8 +16,9 @@ class Actor(nn.Module):
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        a = self.max_action * torch.tanh(self.fc3(x))  # action clipping
-        return a
+        x = self.fc3(x)
+        # a = self.max_action * torch.tanh(self.fc3(x))  # action clipping
+        return x
 
 
 class Critic(nn.Module):
@@ -36,7 +37,7 @@ class Critic(nn.Module):
 
 class ReplayBuffer(object):
     def __init__(self, state_dim, action_dim):
-        self.max_size = int(1e6)
+        self.max_size = 50000#int(1e6)
         self.count = 0
         self.size = 0
         self.s = np.zeros((self.max_size, state_dim))

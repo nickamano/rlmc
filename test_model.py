@@ -58,19 +58,20 @@ if __name__ == "__main__":
     #         print("Episode {} average score: {}".format(episode, sum(scores_env[-10:]) / 10))
 
     # plot2(scores, scores_env, 10, model_name)
+    import sys
+    actor_network_episode_number = sys.argv[1]
+
     """
     Paste info from train_model here
     """
     sim_type = "N-spring2D"
     N = 3
     dt_ = 0.005
-    reward_type = "initial_energy"
+    reward_type = "sim_comparison"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     End Paste
     """
-
-    actor_network_episode_number = 150
 
     env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
     env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
@@ -80,13 +81,15 @@ if __name__ == "__main__":
     actor_model_name = "{}{}".format(model_name, actor_network_episode_number)
     # Load torch model
     model = torch.load("pth/" + actor_model_name + ".pth")
-    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
+    hw0 = int(state_dim * (state_dim - 1)/2)
+    hw1 = state_dim
+    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=hw0, hidden_width1=hw1, batch_size=256, lr=0.005,
                  gamma=0.99, tau=0.002)
     agent.actor = model
 
     print("Simulation Start (from Actor)")
     episodes = 1
-    steps = 2000
+    steps = 4000
 
     positions_actor = []
     positions_target = []
@@ -109,10 +112,13 @@ if __name__ == "__main__":
     done = False
     for step in range(steps):
         action_actor = agent.choose_action(state_actor)
+        # print("asdf: {}".format(action_actor))
+        # print("test: {}".format(agent.choose_action(state_actor + 1*np.ones(state_actor.shape))))
+        # print()
         action_target = env_target.compute_forces(env_target.r)
 
-        next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1, offline=False)
-        next_state_target, reward_target, _ = env_target.step(action_target, n_dt=1, offline=False)
+        next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1, offline=False, verbose=False)
+        next_state_target, reward_target, _ = env_target.step(action_target, n_dt=1, offline=False, verbose=False)
 
         if step % 20 == 0:
             positions_actor.append(env_actor.r)
@@ -121,13 +127,19 @@ if __name__ == "__main__":
             actions_actor.append(action_actor)
             actions_target.append(action_target)
 
+            actor_TE = env_actor.compute_total_K(env_actor.v) + env_actor.compute_total_U(env_actor.r)
+            target_TE = env_target.compute_total_K(env_target.v) + env_target.compute_total_U(env_target.r)
+            # print(actor_TE, target_TE)
+            # print(reward_actor, reward_target)
+            # print()
+
         state_actor = next_state_actor
         state_target = next_state_target
 
     pos_diff = [a - t for a, t in zip(positions_actor, positions_target)]
     act_diff = [a - t.flatten() for a, t in zip(actions_actor, actions_target)]
-    print("pos_diff", pos_diff)
-    print("act_diff", act_diff)
+    # print("pos_diff", pos_diff)
+    # print("act_diff", act_diff)
 
     visualize(np.array(positions_actor), ['b', 'k', 'r'], "{}_actor_{}.gif".format(model_name, actor_network_episode_number))
     visualize(np.array(positions_target), ['b', 'k', 'r'], "{}_target_{}.gif".format(model_name, actor_network_episode_number))

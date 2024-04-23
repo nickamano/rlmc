@@ -20,7 +20,7 @@ if __name__ == "__main__":
     sim_type = "N-spring2D"
     N = 3
     dt_ = 0.005
-    reward_type = "initial_energy"
+    reward_type = "sim_comparison"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     end copy
@@ -29,10 +29,13 @@ if __name__ == "__main__":
     env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
     print(model_name)
     state_dim, action_dim = env.NNdims()
-    max_abs_action = 10
+    max_abs_action = 1000
     converge_score = -200
     # Create DDPG Agent
-    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=state_dim, hidden_width1=state_dim, batch_size=128, lr=0.0005,
+    hw0 = int(state_dim * (state_dim - 1)/2)
+    hw1 = state_dim
+    print(state_dim, hw0, hw1, action_dim)
+    agent = DDPG(state_dim, action_dim, max_abs_action, hidden_width0=hw0, hidden_width1=hw1, batch_size=256, lr=0.005,
                  gamma=0.99, tau=0.002)
     print("Simulation Start")
 
@@ -49,13 +52,15 @@ if __name__ == "__main__":
         done = False
         for step in range(steps):
             action = agent.choose_action(state)
-            next_state, reward, _ = env.step(action, n_dt=1)
+            next_state, reward, _ = env.step(action, n_dt=1, offline=True, verbose=False)
+            # print(reward)
             score += reward
             if score > converge_score and step == steps - 1:
                 done = True
             rb.store(state, action, reward, next_state, int(done))
             agent.learn(rb)
             state = next_state
+
         scores.append(score)
         if len(scores) < 10:
             print("Episode {} average score: {}".format(episode, sum(scores) / len(scores)))
@@ -63,7 +68,7 @@ if __name__ == "__main__":
             print("Episode {} average score: {}".format(episode, sum(scores[-10:]) / 10))
         if episode > 200 and sum(scores[-50:]) / 50 > converge_score:
             break
-        if episode % 50 == 0:
+        if episode % 10 == 0:
             save_model(agent.actor, model_name + str(episode))
 
 

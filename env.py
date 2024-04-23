@@ -125,7 +125,7 @@ class rlmc_env:
         """
         return np.append(self.r.flatten(), self.dt * n_dt)
 
-    def step(self, forces: npt.ArrayLike, n_dt: int, offline: bool = True) -> tuple[npt.ArrayLike, float, bool]:
+    def step(self, forces: npt.ArrayLike, n_dt: int, offline: bool = True, verbose=False) -> tuple[npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation
         Input:
@@ -157,15 +157,31 @@ class rlmc_env:
                     v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
 
                 # Lazy step
-                if offline:
-                    actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
-                    self.v, self.r = (v_target, r_target)
-
-                else:
-                    self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+                # forces = 100*np.ones((3, 2))
+                actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
                 # Calculate Reward
-                reward = self.reward( r_target, actor_v, actor_r)
+                reward = self.reward(v_target,r_target, actor_v, actor_r, forces, target_action)
+                sim_reward = self.reward(v_target, r_target, v_target, r_target, target_action, target_action)
+
+                if verbose:
+                    print("R{}, {}".format(reward, sim_reward))
+                    print("Fa", forces.flatten())
+                    print("Ft", target_action.flatten())
+                    print("Va", actor_v.flatten())
+                    print("Vt", v_target.flatten())
+                    print("KEa", self.compute_total_K(actor_v))
+                    print("KEt", self.compute_total_K(v_target))
+                    print("Ua", self.compute_total_U(actor_r))
+                    print("Ut", self.compute_total_U(r_target))
+                    print("UI", self.U_init)
+                    
+                    print()
+
+                if offline == True:
+                    self.v, self.r = (v_target, r_target)
+                else:
+                    self.v, self.r = (actor_v, actor_r)
 
                 return np.append(self.r.flatten(), self.dt * n_dt), reward, done
 
@@ -194,7 +210,7 @@ class rlmc_env:
         next_r = r + next_v * dt
         return (next_v, next_r)
 
-    def reward(self, r_target, v_predict, r_predict):
+    def reward(self, v_target, r_target, v_predict, r_predict, action_actor, action_target):
         """
         Calculates the reward for given v and r, should be calculated after updating self.v and self.r
         """
@@ -207,6 +223,12 @@ class rlmc_env:
         match self.reward_flag:
             case "initial_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+            case "sim_comparison":
+                K_sim = self.compute_total_K(v_target)
+                U_sim = self.compute_total_U(r_target)
+                total_energy_sim = K_sim + U_sim
+                reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_sim - total_energy_pred) - np.abs(np.subtract(action_actor, action_target)).mean()
+                # reward = 10 - np.abs(np.subtract(action_actor, action_target)).mean()
             case "threshold_energy":
                 if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
                     reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
