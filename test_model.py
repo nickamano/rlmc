@@ -1,4 +1,5 @@
 from env import rlmc_env
+from env_rel import rlmc_env_rel
 from ddpg import *
 from utils import *
 
@@ -73,7 +74,7 @@ if __name__ == "__main__":
     End Paste
     """
 
-    env_actor = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+    env_actor = rlmc_env_rel(sim_type, N, dt_, reward_type)  # Creat env
     env_target = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
 
     state_dim, action_dim = env_actor.NNdims()
@@ -111,9 +112,10 @@ if __name__ == "__main__":
 
     done = False
     for step in range(steps):
-        action_actor = agent.choose_action(state_actor)
+        action_actor = agent.choose_action(env_actor.get_relative_state(n_dt=1))
+        # print(state_actor)
         # print("asdf: {}".format(action_actor))
-        # print("test: {}".format(agent.choose_action(state_actor + 1*np.ones(state_actor.shape))))
+        # print("test: {}".format(agent.choose_action(state_actor + 10*np.ones(state_actor.shape))))
         # print()
         action_target = env_target.compute_forces(env_target.r)
 

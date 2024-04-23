@@ -1,4 +1,5 @@
 from env import rlmc_env
+from env_rel import rlmc_env_rel
 from ddpg import *
 from utils import *
 
@@ -26,7 +27,8 @@ if __name__ == "__main__":
     end copy
     """
 
-    env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+    # env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+    env = rlmc_env_rel(sim_type, N, dt_, reward_type)
     print(model_name)
     state_dim, action_dim = env.NNdims()
     max_abs_action = 1000
@@ -51,7 +53,7 @@ if __name__ == "__main__":
         score = 0
         done = False
         for step in range(steps):
-            action = agent.choose_action(state)
+            action = agent.choose_action(env.get_relative_state(n_dt=1))
             next_state, reward, _ = env.step(action, n_dt=1, offline=True, verbose=False)
             # print(reward)
             score += reward

@@ -37,7 +37,7 @@ class Critic(nn.Module):
 
 class ReplayBuffer(object):
     def __init__(self, state_dim, action_dim):
-        self.max_size = 50000#int(1e6)
+        self.max_size = 100000#int(1e6)
         self.count = 0
         self.size = 0
         self.s = np.zeros((self.max_size, state_dim))
