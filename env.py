@@ -164,9 +164,9 @@ class rlmc_env:
                     self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
                 # Calculate Reward
-                reward = self.reward( r_target, actor_v, actor_r)
+                reward_val = self.reward(r_target, actor_v, actor_r)
 
-                return np.append(self.r.flatten(), self.dt * n_dt), reward, done
+                return np.append(self.r.flatten(), self.dt * n_dt), reward_val, done
 
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -201,7 +201,6 @@ class rlmc_env:
 
         total_energy_init = self.K_init + self.U_init
         total_energy_pred = K_predict + U_predict
-
         match self.reward_flag:
             case "intial_energy":
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)

@@ -20,7 +20,7 @@ class Actor(nn.Module):
 
         def forward(self, state):
             x1 = self.relu(self.fc(state))
-            x2 = self.max_abs_action * self.relu(self.tanh(x1))
+            x2 = self.relu(self.max_abs_action * self.tanh(x1))
             # x1 = self.relu(self.max_abs_action * self.tanh(state))
             # x2 = self.fc(x1)
             mu = self.fc_mu(x2)
@@ -41,9 +41,10 @@ class Critic(nn.Module):
         return self.network(state)
         
 class A2C(object):
-    def __init__(self, model_name, temp, testenv, num_episode=10, max_iterations=1000, max_abs_action=4, n_dt=1):
-        self.state_dim = testenv.N * testenv.D * 2 + 1
-        self.action_dim = testenv.N * testenv.D
+    def __init__(self, model_name, temp, testenv, num_episode=10, max_iterations=1000, max_abs_action=10, n_dt=1):
+        self.state_dim = None
+        self.action_dim = None
+        self.state_dim, self.action_dim = testenv.NNdims()
         self.temp = temp
         self.env = testenv
         self.model_name = model_name
@@ -88,8 +89,8 @@ class A2C(object):
                 score += reward
             
             scores.append(score)
-            if len(scores) % 5 == 0:
-                print(f"average rewards: {sum(scores[-5:])/5} on episode {ep}")
+            if len(scores) % 10 == 0:
+                print(f"average rewards: {sum(scores[-10:])/10} on episode {ep}")
             
             
         
@@ -106,7 +107,7 @@ dt = 0.001
 reward_flag = "initial_energy"
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
-agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=50, max_iterations=300, n_dt=1)
+agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=100, max_iterations=300, n_dt=1)
 agent.initialization()
 agent.train()
 agent.save()
