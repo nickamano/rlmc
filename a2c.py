@@ -114,9 +114,9 @@ class A2C(object):
 
 torch.autograd.set_detect_anomaly(True)
 model_name = "N-spring2D"
-N = 5
+N = 10
 dt = 0.001
-reward_flag = "threshold_energy"
+reward_flag = "initial energy"
 # assert reward_flag == "initial_energy" or reward_flag == "threshold_energy" or reward_flag
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
