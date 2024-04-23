@@ -59,13 +59,13 @@ def plot2(scores, scores_env, average_n, name):
     plt.legend(loc='lower right')
     plt.show()
 
-def visualize(positions, colors, name, xlim=(-5,15), ylim=(-5, 15)):
+def visualize(positions, colormap, c, name, xlim=(-5,15), ylim=(-5, 15)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
     ax.set_title(name)
 
-    scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', c=colors, s=1000)
+    scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', cmap=colormap, c=c, s=1000) #, c=colors
 
     def animate(i):
         scat.set_offsets(positions[i])
