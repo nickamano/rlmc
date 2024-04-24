@@ -5,9 +5,10 @@ from env import *
 import torch.distributions as dist
 import torch.nn.functional as F
 import os
+import pdb
 
 class Actor(nn.Module):
-        def __init__(self, state_dim, action_dim, max_abs_action, temp=1.0):
+        def __init__(self, state_dim, action_dim, max_abs_action, temp=2.0):
             super(Actor, self).__init__()
             self.fc = nn.Linear(state_dim, 256)
             self.relu = nn.ReLU()
@@ -25,8 +26,9 @@ class Actor(nn.Module):
             x2 = self.relu(self.max_abs_action * self.tanh(x1))
             # x1 = self.relu(self.max_abs_action * self.tanh(state))
             # x2 = self.fc(x1)
-            mu = self.fc_mu(x2)
-            std_pre_softmax = self.fc_std(x2)
+            mu = self.relu(self.fc_mu(x2))
+            std_pre_softmax = self.relu(self.fc_std(x2))
+            # pdb.set_trace()
             std = F.softmax(std_pre_softmax / self.temp, dim=-1)
             return dist.Normal(mu, std)
             # x = self.relu(self.fc(state))
@@ -61,6 +63,7 @@ class A2C(object):
         self.max_iterations = max_iterations
         self.n_dt = n_dt
         self.num_epidoes = num_episode
+        self.max_abs_action = max_abs_action
 
     def initialization(self):
         self.env.set_initial_pos(3 * np.random.rand(self.env.N, self.env.D))
@@ -74,27 +77,36 @@ class A2C(object):
             score = 0
             state = self.env.get_current_state(self.n_dt)
             for iter in range(self.max_iterations):
+                if iter%10 == 0: print(f"iteration {iter}")
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
                 action_distribution = self.actor(state_tensor)
                 forces = action_distribution.sample()
-                # forces = F.softmax(forces)
-                # forces = self.actor(state_tensor)
-                log_probs = action_distribution.log_prob(forces).sum()
+                # forces = torch.nan_to_num(forces, nan=0.0, posin)
+                log_probs = action_distribution.log_prob(forces)
+                # log_probs = torch.nan_to_num(log_probs, nan=0.0, posinf=self.max_abs_action, neginf=-self.max_abs_action)
+                log_probs = log_probs.sum()
+
                 next_state, reward, done = self.env.step(forces.detach().numpy().flatten(), self.n_dt)
                 next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
                 value = self.critic(state_tensor)
                 next_value = self.critic(next_state_tensor)
+
                 td_error = reward + 0.99 * next_value * (1 - int(done)) - value
-                critic_loss = td_error.pow(2)
+                critic_loss = td_error.pow(2)  # Do not detach here if you plan to use td_error for the actor loss
+
+                # Zero gradients and perform backpropagation for critic
                 self.critic_optimizer.zero_grad()
                 critic_loss.backward()
                 self.critic_optimizer.step()
-                # actor_loss = -td_error
-                actor_loss = - log_probs * td_error.detach()
+
+                # Calculate actor loss, use detached td_error only if necessary
+                actor_loss = -log_probs * td_error.detach()  # Detach here if only needed to isolate from critic updates
+
+                # Zero gradients and perform backpropagation for actor
                 self.actor_optimizer.zero_grad()
-                # actor_loss.backward(retain_graph=True)
                 actor_loss.backward()
                 self.actor_optimizer.step()
+
                 state = next_state
                 score += reward
             
@@ -105,10 +117,10 @@ class A2C(object):
             
         
     def save(self):
-        if not os.path.exists("pth"):
-            os.mkdir("pth")
+        if not os.path.exists("pth_a2c"):
+            os.mkdir("pth_a2c")
 
-        path = f"pth/{self.model_name}_a2c.pth"
+        path = f"pth_a2c/{self.model_name}_{self.num_epidoes}.pth"
         torch.save(self.actor.to("cpu").state_dict(), path)
 
 
@@ -116,11 +128,11 @@ torch.autograd.set_detect_anomaly(True)
 model_name = "N-spring2D"
 N = 10
 dt = 0.001
-reward_flag = "initial energy"
+reward_flag = "initial_energy"
 # assert reward_flag == "initial_energy" or reward_flag == "threshold_energy" or reward_flag
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
-agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=100, max_iterations=300, n_dt=1)
+agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=200, max_iterations=300, n_dt=1)
 agent.initialization()
 agent.train()
 agent.save()
