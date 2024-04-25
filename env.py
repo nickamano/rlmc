@@ -8,7 +8,7 @@ class rlmc_env:
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
 
-    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold energy") -> None:
+    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold energy", max_dist:int = 5) -> None:
         self.max_int = 65535
         self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
@@ -34,6 +34,7 @@ class rlmc_env:
                 self.v_init = np.zeros((self.N, self.D))
                 self.v = self.v_init
                 self.r = self.r_init
+                self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0)) * 1.1
                 self.center = self.r.mean(axis = 0)
                 self.v_average = self.v.mean(axis = 0)
                 self.terminate = False
@@ -41,8 +42,40 @@ class rlmc_env:
                 self.U_init = 0
                 self.K_init = 0
 
-            case "5N-lj2D":
-                raise NotImplementedError("next implementation")
+            case "N-lj2D":
+                self.N = n
+                self.D = 2
+                self.m = 1
+                self.reward_flag = reward_flag
+
+                self.dt = dt # time step
+                
+                # Simulation Constants
+                self.radius = 0.005   # Molecule Radius
+                self.sig = .45
+                self.eps = 7.05081354867767e-02
+                self.T = 300
+                self.rc = .5 # truncated LJ
+                atr = (self.sig/self.rc)**6
+                rep = atr*atr
+                print(atr, rep)
+                self.A = 48*self.eps/self.rc*(rep-0.5*atr)
+                self.B = -4*self.eps*(13*rep-7*atr)
+
+                self.ts = 0 # current time step
+                self.SoB = max_dist # size of box
+
+                self.r_init = np.zeros((self.N, self.D))
+                self.v_init = np.zeros((self.N, self.D))
+                self.v = self.r_init
+                self.r = self.v_init
+                self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0)) * 1.1
+                self.center = self.r.mean(axis = 0)
+                self.v_average = self.v.mean(axis = 0)
+                self.terminate = False
+
+                self.U_init = 0
+                self.K_init = 0
             case _:
                 raise NotImplementedError("environment currently not implemented")
 
@@ -59,30 +92,25 @@ class rlmc_env:
         """
         Reset the molecular dynamics simulation to initial states
         """
-        match self.simulation:
-            case "N-spring2D":
+        self.v = self.v_init
+        self.r = self.r_init
+        self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
+        self.center = self.r.mean(axis = 0)
+        self.v_average = self.v.mean(axis = 0)
+        self.ts = 0
+        self.terminate = False
 
-                self.v = self.v_init
-                self.r = self.r_init
-                self.center = self.r.mean(axis = 0)
-                self.v_average = self.v.mean(axis = 0)
-                self.ts = 0
-                self.terminate = False
-
-                self.set_initial_energies()
+        self.set_initial_energies()
 
     def reset_random(self, max_dist: float) -> None:
         """
         Reset simulation to randomized initial state
         Use when agent reaches acceptable average reward to change initial conditions
         """
-        match self.simulation:
-            case "N-spring2D":
+        self.r_init = max_dist * np.random.rand(self.N, self.D)
+        self.v_init = np.random.normal(0,1, (self.N, self.D))
 
-                self.r_init = max_dist * np.random.rand(self.N, self.D)
-                self.v_init = np.random.normal(0,1, (self.N, self.D))
-
-                self.reset()
+        self.reset()
 
     def set_seed(self, seed: int) -> None:
         """
@@ -99,6 +127,7 @@ class rlmc_env:
             raise IndexError("Shape must match shape of system")
         self.r_init = pos
         self.r = self.r_init
+        self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
         self.center = self.r.mean(axis = 0)
 
     def set_initial_vel(self, vel: npt.ArrayLike) -> None:
@@ -142,32 +171,33 @@ class rlmc_env:
         if self.terminate:
             raise ValueError("simulation is terminated")
 
-        match self.simulation:
-            case "N-spring2D":
-                self.ts += n_dt
-                done = False
+        self.ts += n_dt
+        done = False
 
-                # Simulation steps
-                v_target = np.copy(self.v)
-                r_target = np.copy(self.r)
-                actor_v = np.copy(self.v)
-                actor_r = np.copy(self.r)
-                for _ in range(n_dt):
-                    target_action = self.compute_forces(r_target)
-                    v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
+        # Simulation steps
+        v_target = np.copy(self.v)
+        r_target = np.copy(self.r)
+        actor_v = np.copy(self.v)
+        actor_r = np.copy(self.r)
+        for _ in range(n_dt):
+            target_action = self.compute_forces(r_target)
+            v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
 
-                # Lazy step
-                if offline:
-                    actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
-                    self.v, self.r = (v_target, r_target)
+        # Lazy step
+        if offline:
+            actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+            self.v, self.r = (v_target, r_target)
 
-                else:
-                    self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+        else:
+            self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
-                # Calculate Reward
-                reward = self.reward( r_target,  actor_v, actor_r)
+        if self.simulation == "N-lj2D":
+            self.r = self.r % self.SoB
 
-                return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
+        # Calculate Reward
+        reward = self.reward(v_target,  r_target,  actor_v, actor_r)
+
+        return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
 
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -183,6 +213,24 @@ class rlmc_env:
                             rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             f[i] -= self.ks * (rij_abs - 2 * self.radius) * rij / rij_abs
+            case "N-lj2D":
+                for i in range(self.N):
+                    for j in range(i + 1, self.N):
+                        rij = r[i] - r[j] % self.SoB
+                        rij_abs = np.linalg.norm(rij)
+
+                        feps = 4*self.eps
+                        teps = 12*feps
+
+                        atr = (self.radius/rij_abs)**6
+                        rep = atr * atr
+                       
+
+                        fjk = teps*(rep-0.5*atr)/rij_abs - self.A
+                        frtk = fjk/rij_abs*rij
+
+                        f[i] += frtk
+                        f[j] -= frtk
         return f
 
     def euler_int(self, v: npt.ArrayLike, r: npt.ArrayLike, force: npt.ArrayLike, dt: float) -> tuple[
@@ -194,7 +242,7 @@ class rlmc_env:
         next_r = r + next_v * dt
         return (next_v, next_r)
 
-    def reward(self, r_target, v_predict, r_predict):
+    def reward(self, v_target, r_target, v_predict, r_predict):
         """
         Calculates the reward for given v and r, should be calculated after updating self.v and self.r
         """
@@ -218,7 +266,7 @@ class rlmc_env:
                 # TODO
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
             case "threshold center of grav":
-                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .1):
+                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05 * (self.N // 5) ):
                     reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) \
                             - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
                 else:
@@ -227,6 +275,24 @@ class rlmc_env:
             case "center of grav":
                 reward = - np.abs(np.subtract(r_target, r_predict)).mean() \
                          - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+            case "energy center of grav":
+                K_predict = self.compute_total_K(v_target)
+                U_predict = self.compute_total_U(r_target)
+                sim_reward = np.abs(total_energy_init - K_predict - U_predict)
+                reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(np.abs(total_energy_init - total_energy_pred ) - sim_reward) \
+                            - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+            case "range_energy_center_of_grav":
+                K_predict = self.compute_total_K(v_target)
+                U_predict = self.compute_total_U(r_target)
+                sim_reward = np.abs(total_energy_init - K_predict - U_predict)
+                energy = np.abs(np.abs(total_energy_init - total_energy_pred ) - sim_reward)
+                range_pred = np.linalg.norm(np.max(r_predict, axis = 0) - np.min(r_predict, axis = 0))
+                range = 0
+                if range_pred > self.range:
+                    range = np.abs(self.range - range_pred)
+                position = np.abs(np.subtract(r_target, r_predict)).mean()
+                center_of_grav = np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
+                reward = - energy - position - center_of_grav - range
             
         return reward
 
@@ -243,6 +309,19 @@ class rlmc_env:
                             rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             U += 1/2 * self.ks * rij_abs**2
+            case "N-lj2D":
+                for i in range(self.N):
+                    for j in range(i + 1, self.N):
+                        rij = r[i] - r[j] % self.SoB
+                        rij_abs = np.linalg.norm(rij)
+
+                        feps = 4*self.eps
+                        teps = 12*feps
+
+                        atr = (self.radius/rij_abs)**6
+                        rep = atr * atr
+
+                        U += feps*(rep-atr) + self.A*rij_abs + self.B
 
         return U
 
@@ -251,10 +330,8 @@ class rlmc_env:
         Compute the total kinetic energy of the system with atoms with velocity v
         """
         K = 0
-        match self.simulation:
-            case "N-spring2D":
-                for i in range(self.N):
-                    K += (self.m / 2) * (v[i] * v[i]).sum()
+        for i in range(self.N):
+            K += (self.m / 2) * (v[i] * v[i]).sum()
         return K
       
 if __name__ == "__main__":
@@ -265,10 +342,10 @@ if __name__ == "__main__":
     match runtype:
         case "demo":
             # Initialize Environment for 2D N-body spring simulation
-            testenv = rlmc_env("N-spring2D", 10, 0.005, flag)
+            testenv = rlmc_env("N-lj2D", 5, 0.005, flag)
 
             # Intialize Starting Positions and Velocities
-            testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
+            testenv.set_initial_pos(5 * np.random.rand(testenv.N, testenv.D))
             testenv.set_initial_vel(np.random.normal(0,1, (testenv.N, testenv.D)))
 
             # Set Initial Energy
@@ -281,8 +358,6 @@ if __name__ == "__main__":
             sum_action = np.zeros((testenv.N, testenv.D))
             print("initial pos: {}".format(testenv.r.flatten()))
             print("initial vel: {}".format(testenv.v.flatten()))
-            print(f"initial velo: {testenv.v_average}")
-            print(f"intial mean velo: {np.mean(testenv.v, axis = 0)}")
             for i in range(n_steps):
                 # print("Step {}".format(i))
                 n_dt = 1
