@@ -16,8 +16,8 @@ if __name__ == "__main__":
     Paste info from train_model here
     """
     sim_type = "N-spring2D"
-    N = 5
-    dt_ = 0.005
+    N = 10
+    dt_ = 0.001
     reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     print("act_diff", act_diff)
 
 
-    colormap='gist_rainbow'
-    c=np.arange(N)
-    visualize(np.array(positions_actor), colormap, c, "{}_actor_{}.gif".format(model_name, actor_network_episode_number))
-    visualize(np.array(positions_target), colormap, c, "{}_target_{}.gif".format(model_name, actor_network_episode_number))
+    # colormap='gist_rainbow'
+    # c=np.arange(N)
+    # visualize(np.array(positions_actor), colormap, c, "{}_actor_{}.gif".format(model_name, actor_network_episode_number))
+    # visualize(np.array(positions_target), colormap, c, "{}_target_{}.gif".format(model_name, actor_network_episode_number))

@@ -20,8 +20,8 @@ if __name__ == "__main__":
     Copy this info to test_model.py
     """
     sim_type = "N-spring2D"
-    N = 5
-    dt_ = 0.005
+    N = 10
+    dt_ = 0.0001
     reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
@@ -39,8 +39,8 @@ if __name__ == "__main__":
                  gamma=0.99, tau=0.002)
     print("Simulation Start")
 
-    episodes = 2000
-    pretrain_episodes = 10
+    episodes = 1000
+    pretrain_episodes = 1
     steps = 2000
     scores = []
 
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         done = False
         for step in range(steps):
             action = agent.choose_action(env.get_relative_state(n_dt=1))
-            next_state, reward, _ = env.step(action, n_dt=1, offline=True, verbose=False)
+            next_state, reward, _ = env.step(action, n_dt=1, offline=True)
             # print(reward)
             score += reward
             if score > converge_score and step == steps - 1:
