@@ -59,15 +59,23 @@ def plot2(scores, scores_env, average_n, name):
     plt.legend(loc='lower right')
     plt.show()
 
-def visualize(positions, colors, name, xlim=(-5, 5), ylim=(-5, 5)):
+def visualize(positions, colors, name, xlim=(-5, 5), ylim=(-5, 5), reward = None, energy = None):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
 
     scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', c=colors, s=1000)
+    if reward:
+        rtext = ax.text(12, 15, f"reward: {reward[0]:5.4f}")
+    if energy:
+        etext = ax.text(12, 14, f"energy: {energy[0]:5.4f}")
 
     def animate(i):
         scat.set_offsets(positions[i])
+        if reward:
+            rtext.set_text(f"reward: {reward[i]:5.4f}")
+        if energy: 
+            etext.set_text(f"energy: {energy[i]:5.4f}")
 
     ani = animation.FuncAnimation(fig, animate, frames=positions.shape[0])
 
