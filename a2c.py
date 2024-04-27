@@ -52,7 +52,7 @@ class Actor(nn.Module):
             mu = self.relu(self.fc_mu(x2))
             std_pre_softmax = self.relu(self.fc_std(x2))
             # pdb.set_trace()
-            std = F.softmax(std_pre_softmax / self.temp, dim=-1)
+            std = F.softmax(std_pre_softmax)
             return dist.Normal(mu, std)
             # x = self.relu(self.fc(state))
             # x = self.relu(self.fc1(x))
@@ -71,37 +71,24 @@ class Critic(nn.Module):
     def forward(self, state):
         return self.network(state)
         
-class A2C(object):
-    def __init__(self, model_name, temp, 
-                 testenv, num_episode=10, max_iterations=1000, 
-                 max_abs_action=10, n_dt=1,
-                 buffer_capacity=1000, batch_size=64
-                 ):
-        self.state_dim = None
-        self.action_dim = None
-        self.state_dim, self.action_dim = testenv.NNdims()
-        self.temp = temp
+class A2C:
+    def __init__(self, model_name, temp, testenv, num_episode=10, max_iterations=1000, max_abs_action=10, n_dt=1, buffer_capacity=10000, batch_size=64):
         self.env = testenv
-        self.model_name = model_name
-        self.actor = Actor(self.state_dim, self.action_dim, max_abs_action,temp)
+        self.state_dim, self.action_dim = testenv.NNdims()
+        self.actor = Actor(self.state_dim, self.action_dim, max_abs_action, temp)
         self.critic = Critic(self.state_dim)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=0.001)
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=0.001)
+        self.model_name = model_name
+        self.num_episodes = num_episode
         self.max_iterations = max_iterations
-        self.n_dt = n_dt
-        self.num_epidoes = num_episode
-        self.max_abs_action = max_abs_action
         self.buffer = ReplayBuffer(capacity=buffer_capacity)
         self.batch_size = batch_size
+        self.n_dt = n_dt
 
-    def initialization(self):
-        self.env.set_initial_pos(3 * np.random.rand(self.env.N, self.env.D))
-        self.env.set_initial_vel(np.zeros((self.env.N, self.env.D)))
-        self.env.set_initial_energies()
-    
     def train(self):
         scores = []
-        for ep in range(self.num_epidoes):
+        for ep in range(self.num_episodes):
             self.env.reset_random(max_dist=5)
             state = self.env.get_current_state(n_dt=1)
             score = 0
@@ -109,46 +96,44 @@ class A2C(object):
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
                 action_distribution = self.actor(state_tensor)
                 action = action_distribution.sample()
-                # log_probs = action_distribution.log_prob(action).sum()
+                # log_probs = action_distribution.log_prob(action).sum(dim=1)
 
-                next_state, reward, _ = self.env.step(action.detach().numpy().flatten(), n_dt=self.n_dt, offline=True)
+                next_state, reward, _= self.env.step(action.detach().numpy().flatten(), n_dt=self.n_dt, offline=True)
                 self.buffer.push(state, action.detach().numpy().flatten(), reward, next_state)
 
                 if len(self.buffer) >= self.batch_size:
                     transitions = self.buffer.sample(self.batch_size)
                     batch = list(zip(*transitions))
-                    state_batch, action_batch, reward_batch, next_state_batch, done_batch = map(torch.FloatTensor, batch)
+                    state_batch, action_batch, reward_batch, next_state_batch = map(torch.FloatTensor, batch)
 
                     value_batch = self.critic(state_batch)
                     next_value_batch = self.critic(next_state_batch)
 
-                    td_errors = reward_batch + 0.99 * next_value_batch * (1 - torch.FloatTensor(done_batch)) - value_batch
+                    td_errors = reward_batch + 0.99 * next_value_batch - value_batch
                     critic_loss = td_errors.pow(2).mean()
 
                     self.critic_optimizer.zero_grad()
                     critic_loss.backward()
                     self.critic_optimizer.step()
 
-                    actor_loss = -(self.actor(state_batch).log_prob(torch.FloatTensor(action_batch)) * td_errors.detach()).mean()
+                    action_distribution_batch = self.actor(state_batch)
+                    log_probs_batch = action_distribution_batch.log_prob(torch.FloatTensor(action_batch)).sum(dim=1)
+                    actor_loss = -(log_probs_batch * td_errors.detach()).mean()
                     
                     self.actor_optimizer.zero_grad()
                     actor_loss.backward()
                     self.actor_optimizer.step()
 
                 state = next_state
-                score += reward
 
             scores.append(score)
             if len(scores) % 10 == 0:
                 print(f"average rewards: {sum(scores[-10:])/10} on episode {ep}")
-            
-            
-        
+
     def save(self):
         if not os.path.exists("pth_a2c"):
             os.mkdir("pth_a2c")
-
-        path = f"pth_a2c/{self.model_name}_{self.num_epidoes}.pth"
+        path = f"pth_a2c/{self.model_name}_{self.num_episodes}.pth"
         torch.save(self.actor.to("cpu").state_dict(), path)
 
 
@@ -170,6 +155,6 @@ reward_flag = "initial_energy"
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
 agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=200, max_iterations=300, n_dt=1)
-agent.initialization()
+
 agent.train()
 agent.save()
