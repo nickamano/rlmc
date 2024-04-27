@@ -19,17 +19,17 @@ if __name__ == "__main__":
     """
     Copy this info to test_model.py
     """
-    sim_type = "N-spring2D"
+    sim_type = "N-lj2D"
     N = 10
-    dt_ = 0.0001
+    dt_ = 0.001
     reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     end copy
     """
 
-    # env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
-    env = rlmc_env_rel(sim_type, N, dt_, reward_type)
+    env = rlmc_env(sim_type, N, dt_, reward_type)  # Creat env
+    # env = rlmc_env_rel(sim_type, N, dt_, reward_type)
     print(model_name)
     state_dim, action_dim = env.NNdims()
     max_abs_action = 10
@@ -51,7 +51,8 @@ if __name__ == "__main__":
         score = 0
         done = False
         for step in range(steps):
-            action = agent.choose_action(env.get_relative_state(n_dt=1))
+            # action = agent.choose_action(env.get_relative_state(n_dt=1))
+            action = agent.choose_action(state)
             next_state, reward, _ = env.step(action, n_dt=1, offline=True)
             # print(reward)
             score += reward

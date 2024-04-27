@@ -5,7 +5,30 @@ from env import *
 import torch.distributions as dist
 import torch.nn.functional as F
 import os
+import random
 import pdb
+
+import signal
+import sys
+
+class ReplayBuffer:
+    def __init__(self, capacity=1000):
+        self.capacity = capacity
+        self.buffer = []
+        self.position = 0
+    
+    def push(self, state, action, reward, next_state):
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(None)
+
+        self.buffer[self.position] = (state, action, reward, next_state)
+        self.position = (self.position + 1) % self.capacity
+    
+    def sample(self, batch_size):
+        return random.sample(self.buffer, batch_size)
+
+    def __len__(self):
+        return len(self.buffer)
 
 class Actor(nn.Module):
         def __init__(self, state_dim, action_dim, max_abs_action, temp=2.0):
@@ -49,7 +72,11 @@ class Critic(nn.Module):
         return self.network(state)
         
 class A2C(object):
-    def __init__(self, model_name, temp, testenv, num_episode=10, max_iterations=1000, max_abs_action=10, n_dt=1):
+    def __init__(self, model_name, temp, 
+                 testenv, num_episode=10, max_iterations=1000, 
+                 max_abs_action=10, n_dt=1,
+                 buffer_capacity=1000, batch_size=64
+                 ):
         self.state_dim = None
         self.action_dim = None
         self.state_dim, self.action_dim = testenv.NNdims()
@@ -64,6 +91,8 @@ class A2C(object):
         self.n_dt = n_dt
         self.num_epidoes = num_episode
         self.max_abs_action = max_abs_action
+        self.buffer = ReplayBuffer(capacity=buffer_capacity)
+        self.batch_size = batch_size
 
     def initialization(self):
         self.env.set_initial_pos(3 * np.random.rand(self.env.N, self.env.D))
@@ -74,42 +103,41 @@ class A2C(object):
         scores = []
         for ep in range(self.num_epidoes):
             self.env.reset_random(max_dist=5)
+            state = self.env.get_current_state(n_dt=1)
             score = 0
-            state = self.env.get_current_state(self.n_dt)
             for iter in range(self.max_iterations):
-                if iter%10 == 0: print(f"iteration {iter}")
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
                 action_distribution = self.actor(state_tensor)
-                forces = action_distribution.sample()
-                # forces = torch.nan_to_num(forces, nan=0.0, posin)
-                log_probs = action_distribution.log_prob(forces)
-                # log_probs = torch.nan_to_num(log_probs, nan=0.0, posinf=self.max_abs_action, neginf=-self.max_abs_action)
-                log_probs = log_probs.sum()
+                action = action_distribution.sample()
+                # log_probs = action_distribution.log_prob(action).sum()
 
-                next_state, reward, done = self.env.step(forces.detach().numpy().flatten(), self.n_dt)
-                next_state_tensor = torch.FloatTensor(next_state).unsqueeze(0)
-                value = self.critic(state_tensor)
-                next_value = self.critic(next_state_tensor)
+                next_state, reward, _ = self.env.step(action.detach().numpy().flatten(), n_dt=self.n_dt, offline=True)
+                self.buffer.push(state, action.detach().numpy().flatten(), reward, next_state)
 
-                td_error = reward + 0.99 * next_value * (1 - int(done)) - value
-                critic_loss = td_error.pow(2)  # Do not detach here if you plan to use td_error for the actor loss
+                if len(self.buffer) >= self.batch_size:
+                    transitions = self.buffer.sample(self.batch_size)
+                    batch = list(zip(*transitions))
+                    state_batch, action_batch, reward_batch, next_state_batch, done_batch = map(torch.FloatTensor, batch)
 
-                # Zero gradients and perform backpropagation for critic
-                self.critic_optimizer.zero_grad()
-                critic_loss.backward()
-                self.critic_optimizer.step()
+                    value_batch = self.critic(state_batch)
+                    next_value_batch = self.critic(next_state_batch)
 
-                # Calculate actor loss, use detached td_error only if necessary
-                actor_loss = -log_probs * td_error.detach()  # Detach here if only needed to isolate from critic updates
+                    td_errors = reward_batch + 0.99 * next_value_batch * (1 - torch.FloatTensor(done_batch)) - value_batch
+                    critic_loss = td_errors.pow(2).mean()
 
-                # Zero gradients and perform backpropagation for actor
-                self.actor_optimizer.zero_grad()
-                actor_loss.backward()
-                self.actor_optimizer.step()
+                    self.critic_optimizer.zero_grad()
+                    critic_loss.backward()
+                    self.critic_optimizer.step()
+
+                    actor_loss = -(self.actor(state_batch).log_prob(torch.FloatTensor(action_batch)) * td_errors.detach()).mean()
+                    
+                    self.actor_optimizer.zero_grad()
+                    actor_loss.backward()
+                    self.actor_optimizer.step()
 
                 state = next_state
                 score += reward
-            
+
             scores.append(score)
             if len(scores) % 10 == 0:
                 print(f"average rewards: {sum(scores[-10:])/10} on episode {ep}")
@@ -124,11 +152,20 @@ class A2C(object):
         torch.save(self.actor.to("cpu").state_dict(), path)
 
 
+def handler(sig, fram):
+    print("control C exit")
+    agent.save()
+    sys.exit(0)
+
+
 torch.autograd.set_detect_anomaly(True)
+hdl = signal.getsignal(signal.SIGINT)
+signal.signal(signal.SIGINT, handler)
 model_name = "N-spring2D"
-N = 10
-dt = 0.001
+N = 3
+dt = 0.005
 reward_flag = "initial_energy"
+# pdb.set_trace()
 # assert reward_flag == "initial_energy" or reward_flag == "threshold_energy" or reward_flag
 model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
 testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
