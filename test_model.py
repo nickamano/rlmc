@@ -16,9 +16,9 @@ if __name__ == "__main__":
     Paste info from train_model here
     """
     sim_type = "N-spring2D"
-    N = 10
-    dt_ = 0.001
-    reward_type = "threshold_energy"
+    N = 3
+    dt_ = 0.005
+    reward_type = "initial_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     End Paste

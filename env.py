@@ -14,7 +14,7 @@ class rlmc_env:
         np.random.seed(self.seed)
         self.simulation = name
 
-        self.eps = 0.05
+        self.eps_hybrid = 0.05
 
         match self.simulation:
             case "N-spring2D":
@@ -43,8 +43,40 @@ class rlmc_env:
                 self.U_init = 0
                 self.K_init = 0
 
-            case "5N-lj2D":
-                raise NotImplementedError("next implementation")
+            case "N-lj2D":
+                self.N = n
+                self.D = 2
+                self.m = 1
+                self.reward_flag = reward_flag
+
+                self.dt = dt # time step
+                
+                # Simulation Constants
+                self.radius = 0.005   # Molecule Radius
+                self.sig = .45
+                self.eps = 7.05081354867767e-02
+                self.T = 300
+                self.rc = .5 # truncated LJ
+                atr = (self.sig/self.rc)**6
+                rep = atr*atr
+                # print(atr, rep)
+                self.A = 48*self.eps/self.rc*(rep-0.5*atr)
+                self.B = -4*self.eps*(13*rep-7*atr)
+
+                self.ts = 0 # current time step
+                self.SoB = 5.0 # size of box
+
+                self.r_init = np.zeros((self.N, self.D))
+                self.v_init = np.zeros((self.N, self.D))
+                self.v = self.r_init
+                self.r = self.v_init
+                self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0)) * 1.1
+                self.center = self.r.mean(axis = 0)
+                self.v_average = self.v.mean(axis = 0)
+                self.terminate = False
+
+                self.U_init = 0
+                self.K_init = 0
             case _:
                 raise NotImplementedError("environment currently not implemented")
 
@@ -72,6 +104,14 @@ class rlmc_env:
                 self.terminate = False
 
                 self.set_initial_energies()
+            case "N-lj2D":
+                    self.v = self.v_init
+                    self.r = self.r_init
+                    self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
+                    self.center = self.r.mean(axis = 0)
+                    self.v_average = self.v.mean(axis = 0)
+                    self.ts = 0
+                    self.terminate = False
 
     def reset_random(self, max_dist: float) -> None:
         """
@@ -80,7 +120,11 @@ class rlmc_env:
         """
         match self.simulation:
             case "N-spring2D":
+                self.r_init = max_dist * np.random.rand(self.N, self.D)
+                self.v_init = np.random.normal(0,1, (self.N, self.D))
 
+                self.reset()
+            case "N-lj2D":
                 self.r_init = max_dist * np.random.rand(self.N, self.D)
                 self.v_init = np.random.normal(0,1, (self.N, self.D))
 
@@ -97,11 +141,20 @@ class rlmc_env:
         """
         Sets the initial positions of the environment
         """
-        if np.array(pos).shape != self.r.shape:
-            raise IndexError("Shape must match shape of system")
-        self.r_init = pos
-        self.r = self.r_init
-        self.center = self.r.mean(axis = 0)
+        match self.simulation:
+            case "N-spring2D":
+                if np.array(pos).shape != self.r.shape:
+                    raise IndexError("Shape must match shape of system")
+                self.r_init = pos
+                self.r = self.r_init
+                self.center = self.r.mean(axis = 0)
+            case "N-lj2D":
+                if np.array(pos).shape != self.r.shape:
+                    raise IndexError("Shape must match shape of system")
+                self.r_init = pos
+                self.r = self.r_init
+                self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
+                self.center = self.r.mean(axis = 0)
 
     def set_initial_vel(self, vel: npt.ArrayLike) -> None:
         """
@@ -144,60 +197,58 @@ class rlmc_env:
         if self.terminate:
             raise ValueError("simulation is terminated")
 
-        match self.simulation:
-            case "N-spring2D":
-                self.ts += n_dt
-                done = False
+        self.ts += n_dt
+        done = False
 
-                # Simulation steps
-                v_target = np.copy(self.v)
-                r_target = np.copy(self.r)
-                actor_v = np.copy(self.v)
-                actor_r = np.copy(self.r)
-                for _ in range(n_dt):
-                    target_action = self.compute_forces(r_target)
-                    v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
+        # Simulation steps
+        v_target = np.copy(self.v)
+        r_target = np.copy(self.r)
+        actor_v = np.copy(self.v)
+        actor_r = np.copy(self.r)
+        for _ in range(n_dt):
+            target_action = self.compute_forces(r_target)
+            v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
 
-                # Lazy step
-                actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
+        # Lazy step
+        actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
-                # Calculate Reward
-                reward = self.reward(v_target,r_target, actor_v, actor_r, forces, target_action)
-                sim_reward = self.reward(v_target, r_target, v_target, r_target, target_action, target_action)
-                force_diff = np.abs(np.subtract(forces, target_action)).mean()
+        # Calculate Reward
+        reward = self.reward(v_target,r_target, actor_v, actor_r, forces, target_action)
+        sim_reward = self.reward(v_target, r_target, v_target, r_target, target_action, target_action)
+        force_diff = np.abs(np.subtract(forces, target_action)).mean()
 
-                # Stop simulation if KE is too large
-                actor_KE = self.compute_total_K(actor_v)
-                if actor_KE > 2*(self.U_init + self.K_init):
-                    print("Particles Exploded")
-                    reward -= 10000
-                    done = True
+        # Stop simulation if KE is too large
+        actor_KE = self.compute_total_K(actor_v)
+        if actor_KE > 2*(self.U_init + self.K_init):
+            print("Particles Exploded")
+            reward -= 10000
+            done = True
 
-                if verbose:
-                    print("R{}, {}".format(reward, sim_reward))
-                    print("Fa", forces.flatten())
-                    print("Ft", target_action.flatten())
-                    print("Va", actor_v.flatten())
-                    print("Vt", v_target.flatten())
-                    print("KEa", self.compute_total_K(actor_v))
-                    print("KEt", self.compute_total_K(v_target))
-                    print("Ua", self.compute_total_U(actor_r))
-                    print("Ut", self.compute_total_U(r_target))
-                    print("UI", self.U_init)
-                    print()
+        if verbose:
+            print("R{}, {}".format(reward, sim_reward))
+            print("Fa", forces.flatten())
+            print("Ft", target_action.flatten())
+            print("Va", actor_v.flatten())
+            print("Vt", v_target.flatten())
+            print("KEa", self.compute_total_K(actor_v))
+            print("KEt", self.compute_total_K(v_target))
+            print("Ua", self.compute_total_U(actor_r))
+            print("Ut", self.compute_total_U(r_target))
+            print("UI", self.U_init)
+            print()
 
-                if offline == "offline":
-                    self.v, self.r = (v_target, r_target)
-                elif offline == "online":
-                    self.v, self.r = (actor_v, actor_r)
-                elif offline == "hybrid":
-                    p = np.random.rand()
-                    if p < self.eps:
-                        self.v, self.r = (actor_v, actor_r)
-                    else:
-                        self.v, self.r = (v_target, r_target)
+        if offline == "offline":
+            self.v, self.r = (v_target, r_target)
+        elif offline == "online":
+            self.v, self.r = (actor_v, actor_r)
+        elif offline == "hybrid":
+            p = np.random.rand()
+            if p < self.eps_hybrid:
+                self.v, self.r = (actor_v, actor_r)
+            else:
+                self.v, self.r = (v_target, r_target)
 
-                return self.r.flatten(), reward, force_diff, done
+        return self.r.flatten(), reward, force_diff, done
 
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -213,6 +264,24 @@ class rlmc_env:
                             rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             f[i] -= self.ks * (rij_abs - 2 * self.radius) * rij / rij_abs
+            case "N-lj2D":
+                for i in range(self.N):
+                    for j in range(i + 1, self.N):
+                        rij = r[i] - r[j] % self.SoB
+                        rij_abs = np.linalg.norm(rij)
+
+                        feps = 4*self.eps
+                        teps = 12*feps
+
+                        atr = (self.radius/rij_abs)**6
+                        rep = atr * atr
+                       
+
+                        fjk = teps*(rep-0.5*atr)/rij_abs - self.A
+                        frtk = fjk/rij_abs*rij
+
+                        f[i] += frtk
+                        f[j] -= frtk
         return f
 
     def euler_int(self, v: npt.ArrayLike, r: npt.ArrayLike, force: npt.ArrayLike, dt: float) -> tuple[
