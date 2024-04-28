@@ -14,6 +14,8 @@ class rlmc_env:
         np.random.seed(self.seed)
         self.simulation = name
 
+        self.eps = 0.05
+
         match self.simulation:
             case "N-spring2D":
                 self.N = n
@@ -51,7 +53,7 @@ class rlmc_env:
         Return the input and output dimensions of the simulation.
         Use for defining NN input and output sizes
         """
-        in_dim = self.N * self.D + 1
+        in_dim = self.N * self.D
         out_dim = self.N * self.D
         return in_dim, out_dim
 
@@ -123,9 +125,9 @@ class rlmc_env:
         """
         Return current state as an flattened array
         """
-        return np.append(self.r.flatten(), self.dt * n_dt)
+        return self.r.flatten()
 
-    def step(self, forces: npt.ArrayLike, n_dt: int, offline: bool = True, verbose=False) -> tuple[npt.ArrayLike, float, bool]:
+    def step(self, forces: npt.ArrayLike, n_dt: int, step: int, offline: str = "offline", verbose=False) -> tuple[npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation
         Input:
@@ -157,12 +159,19 @@ class rlmc_env:
                     v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
 
                 # Lazy step
-                # forces = 100*np.ones((3, 2))
                 actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
                 # Calculate Reward
                 reward = self.reward(v_target,r_target, actor_v, actor_r, forces, target_action)
                 sim_reward = self.reward(v_target, r_target, v_target, r_target, target_action, target_action)
+                force_diff = np.abs(np.subtract(forces, target_action)).mean()
+
+                # Stop simulation if KE is too large
+                actor_KE = self.compute_total_K(actor_v)
+                if actor_KE > 2*(self.U_init + self.K_init):
+                    print("Particles Exploded")
+                    reward -= 10000
+                    done = True
 
                 if verbose:
                     print("R{}, {}".format(reward, sim_reward))
@@ -175,15 +184,20 @@ class rlmc_env:
                     print("Ua", self.compute_total_U(actor_r))
                     print("Ut", self.compute_total_U(r_target))
                     print("UI", self.U_init)
-                    
                     print()
 
-                if offline == True:
+                if offline == "offline":
                     self.v, self.r = (v_target, r_target)
-                else:
+                elif offline == "online":
                     self.v, self.r = (actor_v, actor_r)
+                elif offline == "hybrid":
+                    p = np.random.rand()
+                    if p < self.eps:
+                        self.v, self.r = (actor_v, actor_r)
+                    else:
+                        self.v, self.r = (v_target, r_target)
 
-                return np.append(self.r.flatten(), self.dt * n_dt), reward, done
+                return self.r.flatten(), reward, force_diff, done
 
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -214,33 +228,29 @@ class rlmc_env:
         """
         Calculates the reward for given v and r, should be calculated after updating self.v and self.r
         """
-        K_predict = self.compute_total_K(v_predict)
-        U_predict = self.compute_total_U(r_predict)
-
-        total_energy_init = self.K_init + self.U_init
-        total_energy_pred = K_predict + U_predict
-
         match self.reward_flag:
+            case "force_only":
+                reward = -np.abs(np.subtract(action_actor, action_target)).mean()
             case "initial_energy":
+                total_energy_init = self.K_init + self.U_init
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
             case "sim_comparison":
-                K_sim = self.compute_total_K(v_target)
-                U_sim = self.compute_total_U(r_target)
-                total_energy_sim = K_sim + U_sim
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
+                total_energy_sim = self.compute_total_K(v_target) + self.compute_total_U(r_target)
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_sim - total_energy_pred) - np.abs(np.subtract(action_actor, action_target)).mean()
-                # reward = 10 - np.abs(np.subtract(action_actor, action_target)).mean()
             case "threshold_energy":
-                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
-                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
+                total_energy_sim = self.compute_total_K(v_target) + self.compute_total_U(r_target)
+
+                if np.abs(total_energy_sim - total_energy_pred) > ((total_energy_sim) * .10):
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_sim - total_energy_pred)
                 else:
-                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "no_energy":
-                reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold_moving_energy":
-                # TODO
-                reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean()
             case "threshold_center_of_grav":
-                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .1):
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
+                total_energy_sim = self.compute_total_K(v_target) + self.compute_total_U(r_target)
+                if np.abs(total_energy_sim - total_energy_pred) > ((total_energy_sim) * .1):
                     reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) \
                             - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
                 else:
@@ -249,7 +259,6 @@ class rlmc_env:
             case "center_of_grav":
                 reward = - np.abs(np.subtract(r_target, r_predict)).mean() \
                          - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-            
         return reward
 
     def compute_total_U(self, r):

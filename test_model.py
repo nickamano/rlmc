@@ -16,9 +16,9 @@ if __name__ == "__main__":
     Paste info from train_model here
     """
     sim_type = "N-spring2D"
-    N = 5
-    dt_ = 0.005
-    reward_type = "sim_comparison"
+    N = 10
+    dt_ = 0.001
+    reward_type = "threshold_energy"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     End Paste
@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
     print("Simulation Start (from Actor)")
     episodes = 1
-    steps = 4000
+    steps = 3000
 
     positions_actor = []
     positions_target = []
@@ -62,17 +62,17 @@ if __name__ == "__main__":
 
     done = False
     for step in range(steps):
-        action_actor = agent.choose_action(env_actor.get_relative_state(n_dt=1))
+        action_actor = agent.choose_action(env_actor.get_relative_state(env_actor.r))
         # print(state_actor)
         # print("asdf: {}".format(action_actor))
         # print("test: {}".format(agent.choose_action(state_actor + 10*np.ones(state_actor.shape))))
         # print()
         action_target = env_target.compute_forces(env_target.r)
 
-        next_state_actor, reward_actor, _ = env_actor.step(action_actor, n_dt=1, offline=False, verbose=False)
-        next_state_target, reward_target, _ = env_target.step(action_target, n_dt=1, offline=False, verbose=False)
+        next_state_actor, reward_actor, _, _ = env_actor.step(action_actor, n_dt=1, step=step, offline="online", verbose=False)
+        next_state_target, reward_target, _, _ = env_target.step(action_target, n_dt=1, step=step, offline="online", verbose=False)
 
-        if step % 20 == 0:
+        if step % 50 == 0:
             positions_actor.append(env_actor.r)
             positions_target.append(env_target.r)
 

@@ -17,7 +17,7 @@ def list2txt(mylist, name):
             file.write(str(i) + "\n")
 
 
-def plot1(scores, pretrain_episodes, average_n, name):
+def plot1(scores, pretrain_episodes, average_n, name, objective):
     average_scores = []
     temp = scores[pretrain_episodes - average_n: pretrain_episodes]
     for i in range(pretrain_episodes, len(scores)):
@@ -25,13 +25,13 @@ def plot1(scores, pretrain_episodes, average_n, name):
         temp[idx % average_n] = scores[i]
         average_scores.append(sum(temp) / average_n)
 
-    plt.plot(scores[pretrain_episodes:], label='score')
-    plt.plot(average_scores, label='average score')
+    plt.plot(scores[pretrain_episodes:], label=objective)
+    plt.plot(average_scores, label='average ' + objective)
     plt.title(name)
     plt.xlabel('episodes')
-    plt.ylabel('score')
+    plt.ylabel(objective)
     plt.grid(True)
-    plt.legend(loc='lower right')
+    plt.legend(loc='center right')
     plt.show()
 
 
