@@ -212,6 +212,11 @@ class rlmc_env:
         # Lazy step
         actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
+        # Periodic Condition for LJ
+        if self.simulation == "N-lj2D":
+            actor_r = actor_r % self.SoB
+            r_target = r_target % self.SoB
+
         # Calculate Reward
         reward = self.reward(v_target,r_target, actor_v, actor_r, forces, target_action)
         sim_reward = self.reward(v_target, r_target, v_target, r_target, target_action, target_action)
