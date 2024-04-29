@@ -2,6 +2,7 @@ from env import rlmc_env
 from env_rel import rlmc_env_rel
 from ddpg import *
 from utils import *
+import sys
 
 import sys
 import matplotlib
@@ -30,6 +31,7 @@ if __name__ == "__main__":
     state_dim, action_dim = env_actor.NNdims()
     max_abs_action = 1000
     actor_model_name = "{}{}".format(model_name, actor_network_episode_number)
+
     # Load torch model
     model = torch.load("pth/" + actor_model_name + ".pth")
     hw0 = int(state_dim * (state_dim - 1)/2)
@@ -61,6 +63,8 @@ if __name__ == "__main__":
     score_target = 0
 
     done = False
+    simulated_r = []
+    # actor
     for step in range(steps):
         action_actor = agent.choose_action(env_actor.get_relative_state(env_actor.r))
         # print(state_actor)

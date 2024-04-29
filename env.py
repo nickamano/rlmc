@@ -36,6 +36,9 @@ class rlmc_env:
                 self.v_init = np.zeros((self.N, self.D))
                 self.v = self.v_init
                 self.r = self.r_init
+                
+                self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0)) * 1.1
+
                 self.center = self.r.mean(axis = 0)
                 self.v_average = self.v.mean(axis = 0)
                 self.terminate = False
@@ -59,7 +62,7 @@ class rlmc_env:
                 self.rc = .5 # truncated LJ
                 atr = (self.sig/self.rc)**6
                 rep = atr*atr
-                # print(atr, rep)
+
                 self.A = 48*self.eps/self.rc*(rep-0.5*atr)
                 self.B = -4*self.eps*(13*rep-7*atr)
 
@@ -348,6 +351,19 @@ class rlmc_env:
                             rij = r[i] - r[j]
                             rij_abs = np.linalg.norm(rij)
                             U += 1/2 * self.ks * rij_abs**2
+            case "N-lj2D":
+                for i in range(self.N):
+                    for j in range(i + 1, self.N):
+                        rij = r[i] - r[j] % self.SoB
+                        rij_abs = np.linalg.norm(rij)
+
+                        feps = 4*self.eps
+                        teps = 12*feps
+
+                        atr = (self.radius/rij_abs)**6
+                        rep = atr * atr
+
+                        U += feps*(rep-atr) + self.A*rij_abs + self.B
 
         return U
 
@@ -356,15 +372,14 @@ class rlmc_env:
         Compute the total kinetic energy of the system with atoms with velocity v
         """
         K = 0
-        match self.simulation:
-            case "N-spring2D":
-                for i in range(self.N):
-                    K += (self.m / 2) * (v[i] * v[i]).sum()
+        for i in range(self.N):
+            K += (self.m / 2) * (v[i] * v[i]).sum()
         return K
       
 if __name__ == "__main__":
     import sys
     runtype = sys.argv[1]
+    flag = sys.argv[2]
     
     match runtype:
         case "demo":

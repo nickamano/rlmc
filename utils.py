@@ -69,6 +69,10 @@ def visualize(positions, colormap, c, name, xlim=(-5,15), ylim=(-5, 15)):
 
     def animate(i):
         scat.set_offsets(positions[i])
+        if reward:
+            rtext.set_text(f"reward: {reward[i]:5.4f}")
+        if energy: 
+            etext.set_text(f"energy: {energy[i]:5.4f}")
 
     ani = animation.FuncAnimation(fig, animate, frames=positions.shape[0])
 
