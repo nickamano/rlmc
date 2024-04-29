@@ -25,7 +25,7 @@ if __name__ == "__main__":
     sim_type = "N-lj2D"
     N = 5
     dt_ = 0.005
-    reward_type = "center_of_grav"
+    reward_type = "force_only"
     model_name = "{}_{}_{}_{}".format(sim_type, N, dt_, reward_type)
     """
     end copy
