@@ -37,8 +37,8 @@ class Actor(nn.Module):
             self.relu = nn.ReLU()
             self.fc_mu = nn.Linear(256, action_dim)
             self.fc_std = nn.Linear(256, action_dim)
-            # self.fc1 = nn.Linear(256, 256)
-            # self.fc2 = nn.Linear(256, action_dim)
+            self.fc1 = nn.Linear(256, 256)
+            self.fc2 = nn.Linear(256, action_dim)
             self.tanh = nn.Tanh()
             self.temp = temp
             self.max_abs_action = max_abs_action
@@ -46,14 +46,16 @@ class Actor(nn.Module):
 
         def forward(self, state):
             x1 = self.relu(self.fc(state))
-            x2 = self.relu(self.max_abs_action * self.tanh(x1))
-            # x1 = self.relu(self.max_abs_action * self.tanh(state))
-            # x2 = self.fc(x1)
-            mu = self.relu(self.fc_mu(x2))
-            std_pre_softmax = self.relu(self.fc_std(x2))
-            # pdb.set_trace()
-            std = F.softmax(std_pre_softmax)
-            return dist.Normal(mu, std)
+            x2 = x1
+            if torch.max(x2) > self.max_abs_action or torch.min(x2) < 0:
+                x2 = torch.clamp(x1, min=0, max=self.max_abs_action)
+            
+            mu = torch.add(self.relu(self.fc_mu(x2)), 0.1)
+            std_pre_softmax = torch.add(self.relu(self.fc_std(x2)), 0.1)
+            # # pdb.set_trace()
+            # std = F.softmax(std_pre_softmax/self.temp, dim=-1
+            # )
+            return dist.Normal(mu, std_pre_softmax)
             # x = self.relu(self.fc(state))
             # x = self.relu(self.fc1(x))
             # return self.max_abs_action * torch.tanh(self.fc2(x))
@@ -89,6 +91,7 @@ class A2C:
     def train(self):
         scores = []
         for ep in range(self.num_episodes):
+            print(f"episode {ep}")
             self.env.reset_random(max_dist=5)
             state = self.env.get_current_state(n_dt=1)
             score = 0
@@ -96,6 +99,7 @@ class A2C:
                 state_tensor = torch.FloatTensor(state).unsqueeze(0)
                 action_distribution = self.actor(state_tensor)
                 action = action_distribution.sample()
+                # action = self.actor(state_tensor)
                 # log_probs = action_distribution.log_prob(action).sum(dim=1)
 
                 next_state, reward, _= self.env.step(action.detach().numpy().flatten(), n_dt=self.n_dt, offline=True)
@@ -124,16 +128,18 @@ class A2C:
                     actor_loss.backward()
                     self.actor_optimizer.step()
 
+
                 state = next_state
+                score += reward
 
             scores.append(score)
-            if len(scores) % 10 == 0:
+            if len(scores) > 10:
                 print(f"average rewards: {sum(scores[-10:])/10} on episode {ep}")
 
     def save(self):
         if not os.path.exists("pth_a2c"):
             os.mkdir("pth_a2c")
-        path = f"pth_a2c/{self.model_name}_{self.num_episodes}.pth"
+        path = f"pth_a2c/{self.model_name}.pth"
         torch.save(self.actor.to("cpu").state_dict(), path)
 
 
@@ -143,18 +149,18 @@ def handler(sig, fram):
     sys.exit(0)
 
 
-torch.autograd.set_detect_anomaly(True)
-hdl = signal.getsignal(signal.SIGINT)
-signal.signal(signal.SIGINT, handler)
-model_name = "N-spring2D"
-N = 3
-dt = 0.005
-reward_flag = "initial_energy"
-# pdb.set_trace()
-# assert reward_flag == "initial_energy" or reward_flag == "threshold_energy" or reward_flag
-model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
-testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
-agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=200, max_iterations=300, n_dt=1)
+# torch.autograd.set_detect_anomaly(True)
+# hdl = signal.getsignal(signal.SIGINT)
+# signal.signal(signal.SIGINT, handler)
+# model_name = "N-spring2D"
+# N = 3
+# dt = 0.005
+# reward_flag = "center_of_grav"
+# # pdb.set_trace()
+# # assert reward_flag == "initial_energy" or reward_flag == "threshold_energy" or reward_flag
+# model_full = f"{model_name}_N={N}_dt={dt}_{reward_flag}"
+# testenv = rlmc_env("N-spring2D", N, dt, reward_flag)
+# agent = A2C(model_name=model_full, temp=1, testenv=testenv, num_episode=200, max_iterations=300, n_dt=1)
 
-agent.train()
-agent.save()
+# agent.train()
+# agent.save()
