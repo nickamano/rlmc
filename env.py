@@ -8,11 +8,13 @@ class rlmc_env:
     "5N-spring2D" -- Simulation of 5 atoms connected with Hooks Law with random staring locations and zero velocity
     """
 
-    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold energy", max_dist:int = 5) -> None:
+    def __init__(self, name: str, n: int, dt: float, reward_flag:str = "threshold_energy") -> None:
         self.max_int = 65535
         self.seed = np.random.randint(self.max_int)
         np.random.seed(self.seed)
         self.simulation = name
+
+        self.eps_hybrid = 0.05
 
         match self.simulation:
             case "N-spring2D":
@@ -34,7 +36,9 @@ class rlmc_env:
                 self.v_init = np.zeros((self.N, self.D))
                 self.v = self.v_init
                 self.r = self.r_init
+                
                 self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0)) * 1.1
+
                 self.center = self.r.mean(axis = 0)
                 self.v_average = self.v.mean(axis = 0)
                 self.terminate = False
@@ -58,12 +62,12 @@ class rlmc_env:
                 self.rc = .5 # truncated LJ
                 atr = (self.sig/self.rc)**6
                 rep = atr*atr
-                print(atr, rep)
+
                 self.A = 48*self.eps/self.rc*(rep-0.5*atr)
                 self.B = -4*self.eps*(13*rep-7*atr)
 
                 self.ts = 0 # current time step
-                self.SoB = max_dist # size of box
+                self.SoB = 5.0 # size of box
 
                 self.r_init = np.zeros((self.N, self.D))
                 self.v_init = np.zeros((self.N, self.D))
@@ -84,7 +88,7 @@ class rlmc_env:
         Return the input and output dimensions of the simulation.
         Use for defining NN input and output sizes
         """
-        in_dim = 2 * self.N * self.D + 1
+        in_dim = self.N * self.D
         out_dim = self.N * self.D
         return in_dim, out_dim
 
@@ -92,25 +96,42 @@ class rlmc_env:
         """
         Reset the molecular dynamics simulation to initial states
         """
-        self.v = self.v_init
-        self.r = self.r_init
-        self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
-        self.center = self.r.mean(axis = 0)
-        self.v_average = self.v.mean(axis = 0)
-        self.ts = 0
-        self.terminate = False
+        match self.simulation:
+            case "N-spring2D":
 
-        self.set_initial_energies()
+                self.v = self.v_init
+                self.r = self.r_init
+                self.center = self.r.mean(axis = 0)
+                self.v_average = self.v.mean(axis = 0)
+                self.ts = 0
+                self.terminate = False
+
+                self.set_initial_energies()
+            case "N-lj2D":
+                    self.v = self.v_init
+                    self.r = self.r_init
+                    self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
+                    self.center = self.r.mean(axis = 0)
+                    self.v_average = self.v.mean(axis = 0)
+                    self.ts = 0
+                    self.terminate = False
 
     def reset_random(self, max_dist: float) -> None:
         """
         Reset simulation to randomized initial state
         Use when agent reaches acceptable average reward to change initial conditions
         """
-        self.r_init = max_dist * np.random.rand(self.N, self.D)
-        self.v_init = np.random.normal(0,1, (self.N, self.D))
+        match self.simulation:
+            case "N-spring2D":
+                self.r_init = max_dist * np.random.rand(self.N, self.D)
+                self.v_init = np.random.normal(0,1, (self.N, self.D))
 
-        self.reset()
+                self.reset()
+            case "N-lj2D":
+                self.r_init = max_dist * np.random.rand(self.N, self.D)
+                self.v_init = np.random.normal(0,1, (self.N, self.D))
+
+                self.reset()
 
     def set_seed(self, seed: int) -> None:
         """
@@ -123,12 +144,20 @@ class rlmc_env:
         """
         Sets the initial positions of the environment
         """
-        if np.array(pos).shape != self.r.shape:
-            raise IndexError("Shape must match shape of system")
-        self.r_init = pos
-        self.r = self.r_init
-        self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
-        self.center = self.r.mean(axis = 0)
+        match self.simulation:
+            case "N-spring2D":
+                if np.array(pos).shape != self.r.shape:
+                    raise IndexError("Shape must match shape of system")
+                self.r_init = pos
+                self.r = self.r_init
+                self.center = self.r.mean(axis = 0)
+            case "N-lj2D":
+                if np.array(pos).shape != self.r.shape:
+                    raise IndexError("Shape must match shape of system")
+                self.r_init = pos
+                self.r = self.r_init
+                self.range = np.linalg.norm(np.max(self.r, axis = 0) - np.min(self.r, axis = 0))
+                self.center = self.r.mean(axis = 0)
 
     def set_initial_vel(self, vel: npt.ArrayLike) -> None:
         """
@@ -152,9 +181,9 @@ class rlmc_env:
         """
         Return current state as an flattened array
         """
-        return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt)
+        return self.r.flatten()
 
-    def step(self, forces: npt.ArrayLike, n_dt: int, offline: bool = False) -> tuple[npt.ArrayLike, float, bool]:
+    def step(self, forces: npt.ArrayLike, n_dt: int, step: int, offline: str = "offline", verbose=False) -> tuple[npt.ArrayLike, float, bool]:
         """
         Take a step in the Molecular dynamics simulation
         Input:
@@ -184,20 +213,50 @@ class rlmc_env:
             v_target, r_target = self.euler_int(v_target, r_target, target_action, self.dt)
 
         # Lazy step
-        if offline:
-            actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
-            self.v, self.r = (v_target, r_target)
+        actor_v, actor_r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
 
-        else:
-            self.v, self.r = self.euler_int(self.v, self.r, forces, n_dt * self.dt)
-
+        # Periodic Condition for LJ
         if self.simulation == "N-lj2D":
-            self.r = self.r % self.SoB
+            actor_r = actor_r % self.SoB
+            r_target = r_target % self.SoB
 
         # Calculate Reward
-        reward = self.reward(v_target,  r_target,  actor_v, actor_r)
+        reward = self.reward(v_target,r_target, actor_v, actor_r, forces, target_action)
+        sim_reward = self.reward(v_target, r_target, v_target, r_target, target_action, target_action)
+        force_diff = np.abs(np.subtract(forces, target_action)).mean()
 
-        return np.append(np.concatenate((self.v, self.r)).flatten(), self.dt * n_dt), reward, done
+        # Stop simulation if KE is too large
+        actor_KE = self.compute_total_K(actor_v)
+        if actor_KE > 2*(self.U_init + self.K_init):
+            print("Particles Exploded")
+            reward -= 10000
+            done = True
+
+        if verbose:
+            print("R{}, {}".format(reward, sim_reward))
+            print("Fa", forces.flatten())
+            print("Ft", target_action.flatten())
+            print("Va", actor_v.flatten())
+            print("Vt", v_target.flatten())
+            print("KEa", self.compute_total_K(actor_v))
+            print("KEt", self.compute_total_K(v_target))
+            print("Ua", self.compute_total_U(actor_r))
+            print("Ut", self.compute_total_U(r_target))
+            print("UI", self.U_init)
+            print()
+
+        if offline == "offline":
+            self.v, self.r = (v_target, r_target)
+        elif offline == "online":
+            self.v, self.r = (actor_v, actor_r)
+        elif offline == "hybrid":
+            p = np.random.rand()
+            if p < self.eps_hybrid:
+                self.v, self.r = (actor_v, actor_r)
+            else:
+                self.v, self.r = (v_target, r_target)
+
+        return self.r.flatten(), reward, force_diff, done
 
     def compute_forces(self, r) -> npt.ArrayLike:
         """
@@ -242,58 +301,41 @@ class rlmc_env:
         next_r = r + next_v * dt
         return (next_v, next_r)
 
-    def reward(self, v_target, r_target, v_predict, r_predict):
+    def reward(self, v_target, r_target, v_predict, r_predict, action_actor, action_target):
         """
         Calculates the reward for given v and r, should be calculated after updating self.v and self.r
         """
-        K_predict = self.compute_total_K(v_predict)
-        U_predict = self.compute_total_U(r_predict)
-
-        total_energy_init = self.K_init + self.U_init
-        total_energy_pred = K_predict + U_predict
-
         match self.reward_flag:
-            case "intial energy":
+            case "force_only":
+                reward = -np.abs(np.subtract(action_actor, action_target)).mean()
+            case "initial_energy":
+                total_energy_init = self.K_init + self.U_init
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
                 reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
-            case "threshold energy":
-                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05):
-                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred)
+            case "sim_comparison":
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
+                total_energy_sim = self.compute_total_K(v_target) + self.compute_total_U(r_target)
+                reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_sim - total_energy_pred) - np.abs(np.subtract(action_actor, action_target)).mean()
+            case "threshold_energy":
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
+                total_energy_sim = self.compute_total_K(v_target) + self.compute_total_U(r_target)
+
+                if np.abs(total_energy_sim - total_energy_pred) > ((total_energy_sim) * .10):
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_sim - total_energy_pred)
                 else:
-                    reward = - 10 * np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "no energy":
-                reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold moving energy":
-                # TODO
-                reward = -np.abs(np.subtract(r_target, r_predict)).mean() 
-            case "threshold center of grav":
-                if np.abs(total_energy_init - total_energy_pred) > ((total_energy_init) * .05 * (self.N // 5) ):
+                    reward = -np.abs(np.subtract(r_target, r_predict)).mean()
+            case "threshold_center_of_grav":
+                total_energy_pred = self.compute_total_K(v_predict) + self.compute_total_U(r_predict)
+                total_energy_sim = self.compute_total_K(v_target) + self.compute_total_U(r_target)
+                if np.abs(total_energy_sim - total_energy_pred) > ((total_energy_sim) * .1):
                     reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(total_energy_init - total_energy_pred) \
                             - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
                 else:
                     reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() \
                     - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-            case "center of grav":
+            case "center_of_grav":
                 reward = - np.abs(np.subtract(r_target, r_predict)).mean() \
                          - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-            case "energy center of grav":
-                K_predict = self.compute_total_K(v_target)
-                U_predict = self.compute_total_U(r_target)
-                sim_reward = np.abs(total_energy_init - K_predict - U_predict)
-                reward = - 1 * np.abs(np.subtract(r_target, r_predict)).mean() - np.abs(np.abs(total_energy_init - total_energy_pred ) - sim_reward) \
-                            - np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-            case "range_energy_center_of_grav":
-                K_predict = self.compute_total_K(v_target)
-                U_predict = self.compute_total_U(r_target)
-                sim_reward = np.abs(total_energy_init - K_predict - U_predict)
-                energy = np.abs(np.abs(total_energy_init - total_energy_pred ) - sim_reward)
-                range_pred = np.linalg.norm(np.max(r_predict, axis = 0) - np.min(r_predict, axis = 0))
-                range = 0
-                if range_pred > self.range:
-                    range = np.abs(self.range - range_pred)
-                position = np.abs(np.subtract(r_target, r_predict)).mean()
-                center_of_grav = np.abs(np.sum(self.center + self.dt * self.ts * self.v_average - np.mean(r_predict, axis = 0)))
-                reward = - energy - position - center_of_grav - range
-            
         return reward
 
     def compute_total_U(self, r):
@@ -342,22 +384,24 @@ if __name__ == "__main__":
     match runtype:
         case "demo":
             # Initialize Environment for 2D N-body spring simulation
-            testenv = rlmc_env("N-lj2D", 5, 0.005, flag)
+            testenv = rlmc_env("N-spring2D", 50, 0.00001, "threshold_energy")
 
             # Intialize Starting Positions and Velocities
-            testenv.set_initial_pos(5 * np.random.rand(testenv.N, testenv.D))
+            testenv.set_initial_pos(3 * np.random.rand(testenv.N, testenv.D))
             testenv.set_initial_vel(np.random.normal(0,1, (testenv.N, testenv.D)))
 
             # Set Initial Energy
             testenv.set_initial_energies()
 
             # Section 1: Run simulation for n_steps
-            n_steps = 5000
+            n_steps = 3000
             print("Simulation Start")
             tot_reward = 0
             sum_action = np.zeros((testenv.N, testenv.D))
             print("initial pos: {}".format(testenv.r.flatten()))
             print("initial vel: {}".format(testenv.v.flatten()))
+            print(f"initial velo: {testenv.v_average}")
+            print(f"intial mean velo: {np.mean(testenv.v, axis = 0)}")
             for i in range(n_steps):
                 # print("Step {}".format(i))
                 n_dt = 1

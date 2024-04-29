@@ -5,14 +5,14 @@ import numpy as np
 
 
 if __name__ == "__main__":
-    env = rlmc_env("N-spring2D", 5, 0.005)  # Creat env
+    env = rlmc_env("N-spring2D", 50, 0.00001, "threshold_energy")  # Creat env
     state_dim, action_dim = env.NNdims()
-    max_abs_action = 0.75
+    max_abs_action = 10000
     converge_score = -100
     model_name = "N-spring2D_N=5_dt=0.005"
     print("Simulation Start")
-    episodes = 100
-    steps = 300
+    episodes = 3
+    steps = 2000
     scores = []
     max_action = 0
     min_action = 0
