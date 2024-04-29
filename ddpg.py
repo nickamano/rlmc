@@ -11,13 +11,16 @@ class Actor(nn.Module):
         self.max_action = max_action
         self.fc1 = nn.Linear(state_dim, hidden_width0)
         self.fc2 = nn.Linear(hidden_width0, hidden_width1)
-        self.fc3 = nn.Linear(hidden_width1, action_dim)
+        self.fc3 = nn.Linear(hidden_width1, hidden_width1)
+        self.fc4 = nn.Linear(hidden_width1, action_dim)
 
     def forward(self, state):
         x = F.relu(self.fc1(state))
         x = F.relu(self.fc2(x))
-        a = self.max_action * torch.tanh(self.fc3(x))  # action clipping
-        return a
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
+        # a = self.max_action * torch.tanh(self.fc3(x))  # action clipping
+        return x
 
 
 class Critic(nn.Module):

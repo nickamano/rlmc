@@ -17,7 +17,7 @@ def list2txt(mylist, name):
             file.write(str(i) + "\n")
 
 
-def plot1(scores, pretrain_episodes, average_n, name):
+def plot1(scores, pretrain_episodes, average_n, name, objective):
     average_scores = []
     temp = scores[pretrain_episodes - average_n: pretrain_episodes]
     for i in range(pretrain_episodes, len(scores)):
@@ -25,13 +25,13 @@ def plot1(scores, pretrain_episodes, average_n, name):
         temp[idx % average_n] = scores[i]
         average_scores.append(sum(temp) / average_n)
 
-    plt.plot(scores[pretrain_episodes:], label='score')
-    plt.plot(average_scores, label='average score')
+    plt.plot(scores[pretrain_episodes:], label=objective)
+    plt.plot(average_scores, label='average ' + objective)
     plt.title(name)
     plt.xlabel('episodes')
-    plt.ylabel('score')
+    plt.ylabel(objective)
     plt.grid(True)
-    plt.legend(loc='lower right')
+    plt.legend(loc='center right')
     plt.show()
 
 
@@ -59,16 +59,13 @@ def plot2(scores, scores_env, average_n, name):
     plt.legend(loc='lower right')
     plt.show()
 
-def visualize(positions, colors, name, xlim=(-5, 5), ylim=(-5, 5), reward = None, energy = None):
+def visualize(positions, colormap, c, name, xlim=(-5,15), ylim=(-5, 15)):
     # Setup the figure and axes...
     fig, ax = plt.subplots(figsize=(6,6))
     ax.set(xlim=xlim, ylim=ylim)
+    ax.set_title(name)
 
-    scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', c=colors, s=1000)
-    if reward:
-        rtext = ax.text(12, 15, f"reward: {reward[0]:5.4f}")
-    if energy:
-        etext = ax.text(12, 14, f"energy: {energy[0]:5.4f}")
+    scat = ax.scatter(positions[0,:,0], positions[0,:,1], marker='o', cmap=colormap, c=c, s=1000) #, c=colors
 
     def animate(i):
         scat.set_offsets(positions[i])
